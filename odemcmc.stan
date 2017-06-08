@@ -7,6 +7,10 @@ functions {
 }data {	int<lower=1> T;      	real R[T];      	real t0;      	real ts[T];}transformed data {      	real x_r[0];      	int x_i[0];
 }parameters {      	real<lower=0> sigma;
       	real<lower=0,upper=0.2> y0[5];      	real theta[8];}
+transformed parameters {
+	real<lower=0,upper=1> z;
+	z = y0[1] + y0[2] + y0[3] + y0[4] + y0[5];
+}
 model {      	real y_hat[T,5];
       	real R_hat[T];      	sigma ~ uniform(0,1);
       	theta ~ normal(0.5,1);

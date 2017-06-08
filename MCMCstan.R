@@ -1,4 +1,4 @@
-setwd('/Users/David/Dropbox/Oxford/Dissertation')
+setwd('/Users/David/Dropbox/Oxford/Dissertation/')
 getwd()
 
 
@@ -41,8 +41,8 @@ luk_dat <- list(T = length(remissionDat[,1]),
                 ts = remissionDat$Month)
 
 rstan_options(auto_write = TRUE)
-fit <- stan(file = 'odemcmc.stan', data = luk_dat, 
-            iter = 1000, chains = 1)
+fit <- stan(file = 'MScDissertation/odemcmc.stan', data = luk_dat, 
+            iter = 10, chains = 1)
 print(fit)
 
 la = extract(fit, permuted = TRUE) # return a list of arrays 
