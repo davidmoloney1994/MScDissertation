@@ -42,7 +42,7 @@ luk_dat <- list(T = length(remissionDat[,1]),
 
 rstan_options(auto_write = TRUE)
 fit <- stan(file = 'MScDissertation/odemcmc.stan', data = luk_dat, 
-            iter = 10, chains = 1)
+            iter = 1500, chains = 1)
 print(fit)
 
 la = extract(fit, permuted = TRUE) # return a list of arrays 
