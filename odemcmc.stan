@@ -4,7 +4,7 @@ functions {
 		dydt[4] = theta[6] * y[4] * (1-y[1]-y[2]-y[3]-y[4]-y[5]) - theta[7] * y[4];
 		dydt[5] = theta[7] * y[4] - theta[8] * y[5];        	return dydt;
 	}      
-}data {	int<lower=1> T;      	real R[T];      	real t0;      	real ts[T];}transformed data {      	real x_r[0];      	int x_i[0];
+}data {	int<lower=1> T;      	real R[T];      	real t0;      	real ts[T-1];}transformed data {      	real x_r[0];      	int x_i[0];
 }parameters {      	real<lower=0> sigma;
 	real<lower=0,upper=1> z;
 	simplex[5] y0temp;      	real theta[8];}
@@ -12,14 +12,20 @@ transformed parameters {
 	vector[5] y0;
 	y0 = z * y0temp;
 }
-model {      	real y_hat[T,5];
-      	real R_hat[T];      	sigma ~ uniform(0,1);
+model {      	real y_hat[T-1,5];
+      	real R_hat[T];
+      	sigma ~ uniform(0,1);
       	theta ~ normal(0.5,1);
-	z ~ beta(4,1);      	y_hat = integrate_ode_rk45(m1ode, to_array_1d(y0), t0, ts, theta, x_r, x_i);
-	
-      	for (t in 1:T) {
-		R_hat[t] = y_hat[t,5]/(y_hat[t,5] + 2 * y_hat[t,3]);        	R[t] ~ lognormal(log(R_hat[t]) - (sigma^2)/2 , sigma);
+	z ~ beta(4,1);
+	R_hat[1] = y0[5]/(y0[5] + 2 * y0[3]);
+	//R[1] ~ lognormal(log(R_hat[1]) - (sigma^2)/2 , sigma);
+	R[1] ~ normal(R_hat[1], sigma);
+
+      	y_hat = integrate_ode_rk45(m1ode, to_array_1d(y0), t0, ts, theta, x_r, x_i);
+
+      	for (t in 2:T) {
+		R_hat[t] = y_hat[t-1,5]/(y_hat[t-1,5] + 2 * y_hat[t-1,3]);        	//R[t] ~ lognormal(log(R_hat[t]) - (sigma^2)/2 , sigma);
 		//R[t] ~ lognormal(R_hat[t], sigma);
-		//R[t] ~ normal(R_hat[t], sigma);
+		R[t] ~ normal(R_hat[t], sigma);
       	}}
 

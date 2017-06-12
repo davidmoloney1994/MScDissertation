@@ -34,11 +34,10 @@ remissionDat = aggregate(BCR.ABL1.ABL1.... ~ Month, data = remissionDat, mean)
 
 plot(remissionDat$Month, remissionDat$BCR.ABL1.ABL1....)
 
-
 luk_dat <- list(T = length(remissionDat[,1]), 
                 R = remissionDat$BCR.ABL1.ABL1....,
-                t0 = -1,
-                ts = remissionDat$Month)
+                t0 = 0,
+                ts = remissionDat$Month[-1]) #Remove first time value. It's not used in the ode solver
 
 rstan_options(auto_write = TRUE)
 fit <- stan(file = 'MScDissertation/odemcmc.stan', data = luk_dat, 
@@ -48,6 +47,8 @@ print(fit)
 la = extract(fit, permuted = TRUE) # return a list of arrays 
 thetamcmc = la$theta
 y0mcmc = la$y0
+
+#y0mcmc = matrix(c(la$y0_124[,1], la$y0_124[,2], la$y0_3, la$y0_124[,3], la$y0_5), nrow=length(la$y0_124[,1]))
 
 theta = apply(thetamcmc, 2, mean)
 y0 = apply(y0mcmc, 2, mean)
