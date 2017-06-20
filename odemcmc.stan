@@ -14,18 +14,17 @@ transformed parameters {
 }
 model {      	real y_hat[T-1,5];
       	real R_hat[T];
-      	sigma ~ uniform(0,1);
+      	sigma ~ chi_square(0.05);
       	theta ~ uniform(0,1);
-	z ~ beta(4,1);
+	z ~ beta(4,1);
 	R_hat[1] = y0[5]/(y0[5] + 2 * y0[3]);
-	R[1] ~ lognormal(log(R_hat[1]) - (sigma^2)/2 , sigma);
-	//R[1] ~ normal(R_hat[1], sigma);
+	//R[1] ~ lognormal(log(R_hat[1]) - (sigma^2)/2 , sigma);
+	R[1] ~ normal(R_hat[1], sigma);
 
       	y_hat = integrate_ode_rk45(m1ode, to_array_1d(y0), t0, ts, theta, x_r, x_i);
 
       	for (t in 2:T) {
-		R_hat[t] = y_hat[t-1,5]/(y_hat[t-1,5] + 2 * y_hat[t-1,3]);        	R[t] ~ lognormal(log(R_hat[t]) - (sigma^2)/2 , sigma);
-		//R[t] ~ lognormal(R_hat[t], sigma);
-		//R[t] ~ normal(R_hat[t], sigma);
+		R_hat[t] = y_hat[t-1,5]/(y_hat[t-1,5] + 2 * y_hat[t-1,3]);        	//R[t] ~ lognormal(log(R_hat[t]) - (sigma^2)/2 , sigma);
+		R[t] ~ normal(R_hat[t], sigma);
       	}}
 

@@ -55,17 +55,26 @@ luk_dat_relapse25 <- list(T = length(relapseDat25[,1]),
 y0remissioninit = c(0.289, 0.009, 0.006, 0.04, 0.066)
 thetaremissioninit = c(0.7,0.7,0.6,0.5,0.1,0.1,0.1,0.9)
 
-y0relapseinit = c(0.27,0.219,0.093,0.077,0.162)
-thetarelapseinit = c(0.1,0.8,0.1,0.9,0.2,0.9,0.4,0.8)
+y0relapseinit = c(0.27,0.219,0.05,0.077,0.162)
+thetarelapseinit = c(0.1,0.8,0.2,0.8,0.2,0.9,0.4,0.8)
 
-
-fit <- stan(file = 'MScDissertation/odemcmc.stan', data = luk_dat_relapse25, 
+#Full remission data, no initialization
+fit <- stan(file = 'MScDissertation/odemcmc.stan', data = luk_dat_remission, 
             iter = 1000, chains = 1)
-
+#Full remission data, initialization for initial values
+fit <- stan(file = 'MScDissertation/odemcmc.stan', data = luk_dat_remission, iter = 1000, chains = 1,
+            init = list(list(y0temp=y0remissioninit/sum(y0remissioninit), z=sum(y0remissioninit))))
+#Full remission data, full initialization
 fit <- stan(file = 'MScDissertation/odemcmc.stan', data = luk_dat_remission, iter = 100, chains = 1,
             init = list(list(y0temp=y0remissioninit/sum(y0remissioninit), z=sum(y0remissioninit), theta=thetaremissioninit)))
-
-fit <- stan(file = 'MScDissertation/odemcmc.stan', data = luk_dat_relapse25, iter = 100, chains = 1,
+#Patient 25, no initialization
+fit <- stan(file = 'MScDissertation/odemcmc.stan', data = luk_dat_relapse25, 
+            iter = 1000, chains = 1)
+#Patient 25, initial value initialization
+fit <- stan(file = 'MScDissertation/odemcmc.stan', data = luk_dat_relapse25, iter = 1000, chains = 1,
+            init = list(list(y0temp=y0relapseinit/sum(y0relapseinit), z=sum(y0relapseinit))))
+#Patient 25, full initialization
+fit <- stan(file = 'MScDissertation/odemcmc.stan', data = luk_dat_relapse25, iter = 1000, chains = 1,
             init = list(list(y0temp=y0relapseinit/sum(y0relapseinit), z=sum(y0relapseinit), theta=thetarelapseinit)))
 
 
@@ -76,10 +85,13 @@ la = extract(fit, permuted = TRUE) # return a list of arrays
 thetamcmc = la$theta
 y0mcmc = la$y0
 
-#y0mcmc = matrix(c(la$y0_124[,1], la$y0_124[,2], la$y0_3, la$y0_124[,3], la$y0_5), nrow=length(la$y0_124[,1]))
+max_index = which.max(la$lp__)
 
-theta = apply(thetamcmc, 2, mean)
-y0 = apply(y0mcmc, 2, mean)
+theta = thetamcmc[max_index,]
+y0 = y0mcmc[max_index,]
+
+#theta = apply(thetamcmc, 2, mean)
+#y0 = apply(y0mcmc, 2, mean)
 
 parameters = c(ax = theta[1], bx = theta[2], cx = theta[3],
                dx = theta[4], ex = theta[5], ay = theta[6],
@@ -87,7 +99,7 @@ parameters = c(ax = theta[1], bx = theta[2], cx = theta[3],
 
 state = c(x0 = y0[1], x1 = y0[2], x2 = y0[3], y0 = y0[4], y1 = y0[5])
 
-#parameters = c(ax=0.1,bx=0.8,cx=0.1,dx=0.9,ex=0.2,ay=0.9,by=0.4,ey=0.8)
+#parameters = c(ax=0.2,bx=0.8,cx=0.3,dx=0.8,ex=0.2,ay=0.9,by=0.3,ey=0.8)
 
 desystem <- function(t, state, parameters) {
   with(as.list(c(state, parameters)), {
@@ -106,3 +118,6 @@ head(out)
 
 R = out[,6]/(out[,6] + 2*out[,4])
 lines(out[,1], R, col='red')
+
+plot(la$lp__, t='l')
+plot(la$sigma, t='l')
