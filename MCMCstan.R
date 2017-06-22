@@ -43,7 +43,7 @@ luk_dat_remission <- list(T = length(remissionDat[,1]),
 #Patient 25, relapse
 patient = 25
 ind = which(dat[,1] == patient)
-plot(dat[ind,2], dat[ind,3])
+plot(dat[ind,2], dat[ind,3], ylim=c(0,1))
 
 relapseDat25 = dat[which(dat[,1] == 25),]
 
@@ -69,7 +69,7 @@ fit <- stan(file = 'MScDissertation/odemcmc.stan', data = luk_dat_remission, ite
             init = list(list(y0temp=y0remissioninit/sum(y0remissioninit), z=sum(y0remissioninit), theta=thetaremissioninit)))
 #Patient 25, no initialization
 fit <- stan(file = 'MScDissertation/odemcmc.stan', data = luk_dat_relapse25, 
-            iter = 1000, chains = 1)
+            iter = 5000, chains = 1)
 #Patient 25, initial value initialization
 fit <- stan(file = 'MScDissertation/odemcmc.stan', data = luk_dat_relapse25, iter = 1000, chains = 1,
             init = list(list(y0temp=y0relapseinit/sum(y0relapseinit), z=sum(y0relapseinit))))
@@ -81,11 +81,19 @@ fit <- stan(file = 'MScDissertation/odemcmc.stan', data = luk_dat_relapse25, ite
 print(fit)
 get_inits(fit)
 
-la = extract(fit, permuted = TRUE) # return a list of arrays 
+la = extract(fit, permuted = T) # return a list of arrays 
 thetamcmc = la$theta
 y0mcmc = la$y0
 
+m = cbind(la$theta,
+la$y0,
+la$v)
+
+decomp = svd(m)
+plot(decomp$d)
+
 max_index = which.max(la$lp__)
+max(la$lp__)
 
 theta = thetamcmc[max_index,]
 y0 = y0mcmc[max_index,]
@@ -119,5 +127,6 @@ head(out)
 R = out[,6]/(out[,6] + 2*out[,4])
 lines(out[,1], R, col='red')
 
-plot(la$lp__, t='l')
-plot(la$sigma, t='l')
+#likelihood plot
+plot(extract(fit,permuted=F)[,1,21], t='l')
+dimnames(extract(fit,permuted=F))
