@@ -69,7 +69,7 @@ fit <- stan(file = 'MScDissertation/odemcmc.stan', data = luk_dat_remission, ite
             init = list(list(y0temp=y0remissioninit/sum(y0remissioninit), z=sum(y0remissioninit), theta=thetaremissioninit)))
 #Patient 25, no initialization
 fit <- stan(file = 'MScDissertation/odemcmc.stan', data = luk_dat_relapse25, 
-            iter = 5000, chains = 1)
+            iter = 1000, chains = 1)
 #Patient 25, initial value initialization
 fit <- stan(file = 'MScDissertation/odemcmc.stan', data = luk_dat_relapse25, iter = 1000, chains = 1,
             init = list(list(y0temp=y0relapseinit/sum(y0relapseinit), z=sum(y0relapseinit))))
@@ -85,12 +85,20 @@ la = extract(fit, permuted = T) # return a list of arrays
 thetamcmc = la$theta
 y0mcmc = la$y0
 
+n = length(la$theta[,1])
+n=14
+
 m = cbind(la$theta,
 la$y0,
 la$v)
 
 decomp = svd(m)
 plot(decomp$d)
+
+decomp$d[1:2]
+sig = matrix(c(decomp$d[1], rep(0,n), decomp$d[2], rep(0, n-2)), nrow=n)
+
+plot(decomp$u %*% sig)
 
 max_index = which.max(la$lp__)
 max(la$lp__)
