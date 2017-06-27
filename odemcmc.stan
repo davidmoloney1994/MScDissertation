@@ -5,7 +5,7 @@ functions {
 		dydt[5] = theta[7] * y[4] - theta[8] * y[5];        	return dydt;
 	}      
 }data {	int<lower=1> T;      	real R[T];      	real t0;      	real ts[T-1];}transformed data {      	real x_r[0];      	int x_i[0];
-}parameters {      	real<lower=0> v;
+}parameters {      	real<lower=0, upper=0.03> v;
 	real<lower=0,upper=1> z;
 	simplex[5] y0temp;      	real<lower=0,upper=1> theta[8];}
 transformed parameters {
@@ -15,7 +15,7 @@ transformed parameters {
 model {      	real y_hat[T-1,5];
       	real R_hat[T];
 	real sigma[T];
-	      	v ~ chi_square(0.05);
+	      	v ~ uniform(0, 0.03);
       	theta ~ uniform(0,1);
 	z ~ beta(4,1);
 	R_hat[1] = y0[5]/(y0[5] + 2 * y0[3]);
