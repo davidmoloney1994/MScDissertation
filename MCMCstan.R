@@ -4,7 +4,7 @@ getwd()
 library("rstan")
 rstan_options(auto_write = TRUE)
 options(mc.cores = parallel::detectCores())
-#library(deSolve)
+library(deSolve)
 #library(scatterplot3d)
 #library(rgl)
 library(plot3D)
@@ -14,8 +14,8 @@ library(plot3D)
 data = read.csv("datatest.csv", header=T, stringsAsFactors=F)
 
 #Set the data to be used
-inputdata = setRemissionData(data)
-inputdata = setPatientData(25, showPlot = T)
+inputdata = setRemissionData(data, showPlot = T)
+inputdata = setPatientData(data, 25, showPlot = T)
 
 standata = list(T = length(inputdata[,1]), 
                           R = inputdata$BCR.ABL1.ABL1....,
@@ -23,7 +23,7 @@ standata = list(T = length(inputdata[,1]),
                           ts = inputdata$Month[-1])
 
 fit <- stan(file = 'MScDissertation/odemcmc.stan', data = standata, 
-            iter = 100, chains = 1)
+            iter = 300000, chains = 1, warmup = 10000)
 
 #y0remissioninit = c(0.289, 0.009, 0.006, 0.04, 0.066)
 #thetaremissioninit = c(0.7,0.7,0.6,0.5,0.1,0.1,0.1,0.9)
@@ -124,38 +124,49 @@ svdtransfromplot = function(stanfit, Phi=30, Theta=30)
 }
 
 #Sets the patient data for a given patient
-setPatientData = function(PatientNumber = 25, showPlot = F)
+setPatientData = function(fulldata, PatientNumber = 25, showPlot = F)
 {
-  ind = which(dat[,1] == PatientNumber)
+  tempdata = fulldata
+  tempdata[,3] = as.numeric(tempdata[,3])
+  tempdata = na.omit(tempdata)
+
+  tempdata[,3] = tempdata[,3]/100
+  ind = which(tempdata[,1] == PatientNumber)
   
-  PatientData = dat[which(dat[,1] == PatientNumber),]
+  PatientData = tempdata[ind,]
   
   if(showPlot == T)
-    plot(PatientData$Month, PatientData$BCR.ABL1.ABL1...., ylim=c(0,1))
+    plot(PatientData[,2], PatientData[,3], ylim=c(0,1))
+  
   return(PatientData)
 }
 
 #Sets aggrigated remission data
-setRemissionData = function(fulldata)
+setRemissionData = function(fulldata, showPlot=F)
 {
-  fulldata[,3] = as.numeric(data[,3])
-  dat = na.omit(fulldata)
+  tempdata = fulldata
   
-  dat[,3] = dat[,3]/100
+  tempdata[,3] = as.numeric(tempdata[,3])
+  tempdata = na.omit(tempdata)
+  
+  tempdata[,3] = tempdata[,3]/100
   relapse = NULL
   
-  for(i in 1:(length(dat[,1]) - 1))
+  for(i in 1:(length(tempdata[,1]) - 1))
   {
-    if(dat[i+1,3] > dat[i,3] + 0.05 && dat[i,1] == dat[i+1,1])
-      relapse = c(relapse, dat[i,1])
+    if(tempdata[i+1,3] > tempdata[i,3] + 0.05 && tempdata[i,1] == tempdata[i+1,1])
+      relapse = c(relapse, tempdata[i,1])
   }
   
   relapse = unique(relapse)
   remission = setdiff(1:69,relapse)
   
-  remissionDat = dat[which(dat[,1] %in% remission),]
-  relapseDat = dat[which(dat[,1] %in% relapse),]
+  remissionDat = tempdata[which(tempdata[,1] %in% remission),]
+  relapseDat = tempdata[which(tempdata[,1] %in% relapse),]
   
   remissionDat = aggregate(BCR.ABL1.ABL1.... ~ Month, data = remissionDat, mean)
+  
+  if(showPlot == T)
+    plot(remissionDat[,1], remissionDat[,2], ylim=c(0,1))
   return(remissionDat)
 }
