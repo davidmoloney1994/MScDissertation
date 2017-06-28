@@ -1,15 +1,11 @@
 setwd('/Users/David/Dropbox/Oxford/Dissertation/')
 getwd()
 
-library("rstan")
+library(rstan)
 rstan_options(auto_write = TRUE)
 options(mc.cores = parallel::detectCores())
 library(deSolve)
-#library(scatterplot3d)
-#library(rgl)
 library(plot3D)
-#library(Rcmdr)
-
 
 data = read.csv("datatest.csv", header=T, stringsAsFactors=F)
 
@@ -23,7 +19,16 @@ standata = list(T = length(inputdata[,1]),
                           ts = inputdata$Month[-1])
 
 fit <- stan(file = 'MScDissertation/odemcmc.stan', data = standata, 
-            iter = 300000, chains = 1, warmup = 10000)
+            iter = 1000, chains = 1)
+
+print(fit)
+get_inits(fit)
+
+finalsolutionplot(fit, inputdata$Month, inputdata$BCR.ABL1.ABL1....)
+generatePlots(fit, plotDensity = T, plotTheta = T, ploty0 = T, plotz = T, plotv = T)
+
+svdtransfromplot(fit, 0, 100)
+
 
 #y0remissioninit = c(0.289, 0.009, 0.006, 0.04, 0.066)
 #thetaremissioninit = c(0.7,0.7,0.6,0.5,0.1,0.1,0.1,0.9)
@@ -45,22 +50,11 @@ fit <- stan(file = 'MScDissertation/odemcmc.stan', data = standata,
 #            init = list(list(y0temp=y0relapseinit/sum(y0relapseinit), z=sum(y0relapseinit), theta=thetarelapseinit)))
 
 
-print(fit)
-get_inits(fit)
-
-finalsolutionplot(fit, inputdata$Month, inputdata$BCR.ABL1.ABL1....)
-generatePlots(fit, plotDensity = T, plotTheta = T)
-
-svdtransfromplot(fit, 0, 70)
 
 
-#likelihood plot
-plot(extract(fit,permuted=F)[,1,21], t='l')
-dimnames(extract(fit,permuted=F))
-
-
-
-
+#Write and read to file
+#write.csv(extract(fit,permuted=T), file='50000relapse.csv')
+#mcmcdat = read.csv('300000relapse.csv', header=T)
 
 #Functions
 
@@ -89,6 +83,9 @@ finalsolutionplot = function(stanfit, xdata, ydata)
   
   theta = thetamcmc[max_index,]
   y0 = y0mcmc[max_index,]
+  
+  print(theta)
+  print(y0)
   
   parameters = c(ax = theta[1], bx = theta[2], cx = theta[3],
                  dx = theta[4], ex = theta[5], ay = theta[6],
@@ -172,6 +169,7 @@ setRemissionData = function(fulldata, showPlot=F)
   return(remissionDat)
 }
 
+#Generate Density and Trace plots from mcmc output
 generatePlots = function(stanfit, plotDensity = T, plotTrace = F, plotTheta = T, ploty0 = F, plotz = F, plotv = F, plotloglik = F)
 {
   if(plotDensity == T)
@@ -241,3 +239,4 @@ generatePlots = function(stanfit, plotDensity = T, plotTrace = F, plotTheta = T,
     }
   }
 }
+
