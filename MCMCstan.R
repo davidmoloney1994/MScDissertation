@@ -49,6 +49,7 @@ print(fit)
 get_inits(fit)
 
 finalsolutionplot(fit, inputdata$Month, inputdata$BCR.ABL1.ABL1....)
+generatePlots(fit, plotDensity = T, plotTheta = T)
 
 svdtransfromplot(fit, 0, 70)
 
@@ -169,4 +170,74 @@ setRemissionData = function(fulldata, showPlot=F)
   if(showPlot == T)
     plot(remissionDat[,1], remissionDat[,2], ylim=c(0,1))
   return(remissionDat)
+}
+
+generatePlots = function(stanfit, plotDensity = T, plotTrace = F, plotTheta = T, ploty0 = F, plotz = F, plotv = F, plotloglik = F)
+{
+  if(plotDensity == T)
+  {
+    la = extract(stanfit, permuted = T) # return a list of arrays 
+    thetamcmc = la$theta
+    y0mcmc = la$y0
+    zmcmc = la$z
+    vmcmc = la$v
+    loglikmcmc = la$lp__
+    
+    if(plotTheta == T)
+    {
+      for(i in 1:8)
+        plot(density(thetamcmc[,i]), main=paste("Density of theta",i))
+    }
+    if(ploty0 == T)
+    {
+      for(i in 1:5)
+        plot(density(y0mcmc[,i]),main=paste("Density of y0 for ode",i))
+    }
+    if(plotz == T)
+    {
+      plot(density(zmcmc), main="Density of z")
+    }
+    if(plotv == T)
+    {
+      plot(density(vmcmc), main="Density of v")
+    }
+    if(plotv == T)
+    {
+      plot(density(loglikmcmc), main="Density of Posterior Log Likelihood")
+    }
+  }
+  if(plotTrace == T)
+  {
+    nonpermutedvalues = extract(stanfit,permuted=F)
+    nonpermutedvalues[1,1,1]
+    
+    thetamcmc = nonpermutedvalues[,1,8:15]
+    y0mcmc = nonpermutedvalues[,1,16:20]
+    zmcmc = nonpermutedvalues[,1,2]
+    vmcmc = nonpermutedvalues[,1,1]
+    loglikmcmc = nonpermutedvalues[,1,21]
+    
+    if(plotTheta == T)
+    {
+      for(i in 1:8)
+        plot(thetamcmc[,i], main=paste("Trace of theta",i), type='l')
+    }
+    if(ploty0 == T)
+    {
+      for(i in 1:5)
+        plot(y0mcmc[,i],main=paste("Trace of y0 for ode",i), type='l')
+    }
+    if(plotz == T)
+    {
+      plot(zmcmc,main="Trace of z", type='l')
+    }
+    if(plotv == T)
+    {
+      plot(vmcmc,main="Trace of v", type='l')
+    }
+    if(plotloglik == T)
+    {
+      plot(loglikmcmc,main="Trace of Posterior Log Likelihood", type='l')
+    }
+  }
 }
