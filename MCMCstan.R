@@ -24,10 +24,10 @@ fit <- stan(file = 'MScDissertation/odemcmc.stan', data = standata,
 print(fit)
 get_inits(fit)
 
-finalsolutionplot(fit, inputdata$Month, inputdata$BCR.ABL1.ABL1....)
-generatePlots(fit, plotDensity = T, plotTheta = T, ploty0 = T, plotz = T, plotv = T)
+finalsolutionplot(stanfit = fit, xdata = inputdata$Month, ydata = inputdata$BCR.ABL1.ABL1....)
+generatePlots(stanfit = fit, plotDensity = T, plotTheta = T, ploty0 = T, plotz = T, plotv = T)
 
-svdtransfromplot(fit, 0, 100)
+svdtransfromplot(stanfit = fit, Phi = 0, Theta = 100)
 
 
 #y0remissioninit = c(0.289, 0.009, 0.006, 0.04, 0.066)
@@ -54,7 +54,10 @@ svdtransfromplot(fit, 0, 100)
 
 #Write and read to file
 #write.csv(extract(fit,permuted=T), file='50000relapse.csv')
-#mcmcdat = read.csv('300000relapse.csv', header=T)
+mcmcdat = read.csv('50000relapse.csv', header=T)
+finalsolutionplot(mcmcData = mcmcdat, xdata = inputdata$Month, ydata = inputdata$BCR.ABL1.ABL1....)
+generatePlots(mcmcData = mcmcdat, plotDensity = T, plotTheta = T, ploty0 = T, plotz = T, plotv = T)
+svdtransfromplot(mcmcData = mcmcdat, Phi = 0, Theta = 100)
 
 #Functions
 
@@ -71,15 +74,27 @@ desystem = function(t, state, parameters) {
 }
 
 #Plots the data and the ode solution using the best stan outputs
-finalsolutionplot = function(stanfit, xdata, ydata)
+finalsolutionplot = function(stanfit = NULL, mcmcData = NULL, xdata, ydata)
 {
   plot(xdata, ydata, ylim=c(0,1), xlim=c(0, max(xdata)+5))
   
-  la = extract(stanfit, permuted = T) # return a list of arrays 
-  thetamcmc = la$theta
-  y0mcmc = la$y0
+  if(is.null(mcmcData))
+  {
+    la = extract(stanfit, permuted = T) # return a list of arrays 
+    thetamcmc = la$theta
+    y0mcmc = la$y0
+    loglikmcmc = la$lp__
+  }
+  else
+  {
+    mcmcData = as.matrix(mcmcData)
+    colnames(mcmcData) = NULL
+    thetamcmc = mcmcData[,9:16]
+    y0mcmc = mcmcData[,17:21]
+    loglikmcmc = mcmcData[,22]
+  }
   
-  max_index = which.max(la$lp__)
+  max_index = which.max(loglikmcmc)
   
   theta = thetamcmc[max_index,]
   y0 = y0mcmc[max_index,]
@@ -102,18 +117,29 @@ finalsolutionplot = function(stanfit, xdata, ydata)
 }
 
 #plots the svd transform of the mcmc output in 3d
-svdtransfromplot = function(stanfit, Phi=30, Theta=30)
+svdtransfromplot = function(stanfit = NULL, mcmcData = NULL, Phi=30, Theta=30)
 {
-  la = extract(stanfit, permuted = T) # return a list of arrays 
-  thetamcmc = la$theta
-  y0mcmc = la$y0
+  if(is.null(mcmcData))
+  {
+    la = extract(stanfit, permuted = T) # return a list of arrays 
+    thetamcmc = la$theta
+    y0mcmc = la$y0
+    vmcmc = la$v
+  }
+  else
+  {
+    mcmcData = as.matrix(mcmcData)
+    colnames(mcmcData) = NULL
+    thetamcmc = mcmcData[,9:16]
+    y0mcmc = mcmcData[,17:21]
+    vmcmc = mcmcData[,2]
+  }
   
-  n = length(la$theta[,1])
   n=14
   
-  m = cbind(la$theta,
-            la$y0,
-            la$v)
+  m = cbind(thetamcmc,
+            y0mcmc,
+            vmcmc)
   
   decomp = svd(m)
   sig = matrix(c(decomp$d[1], rep(0,n), decomp$d[2], rep(0, n), decomp$d[3], rep(0, n-3)), nrow=n)
@@ -170,17 +196,29 @@ setRemissionData = function(fulldata, showPlot=F)
 }
 
 #Generate Density and Trace plots from mcmc output
-generatePlots = function(stanfit, plotDensity = T, plotTrace = F, plotTheta = T, ploty0 = F, plotz = F, plotv = F, plotloglik = F)
+generatePlots = function(stanfit = NULL, mcmcData = NULL, plotDensity = T, plotTrace = F, plotTheta = T, ploty0 = F, plotz = F, plotv = F, plotloglik = F)
 {
+  if(is.null(mcmcData))
+  {
+    nonpermutedvalues = extract(stanfit,permuted=F)
+    thetamcmc = nonpermutedvalues[,1,8:15]
+    y0mcmc = nonpermutedvalues[,1,16:20]
+    zmcmc = nonpermutedvalues[,1,2]
+    vmcmc = nonpermutedvalues[,1,1]
+    loglikmcmc = nonpermutedvalues[,1,21]
+  }
+  else
+  {
+    mcmcData = as.matrix(mcmcData)
+    colnames(mcmcData) = NULL
+    thetamcmc = mcmcData[,9:16]
+    y0mcmc = mcmcData[,17:21]
+    zmcmc = mcmcData[,3]
+    vmcmc = mcmcData[,2]
+    loglikmcmc = mcmcData[,22]
+  }
   if(plotDensity == T)
   {
-    la = extract(stanfit, permuted = T) # return a list of arrays 
-    thetamcmc = la$theta
-    y0mcmc = la$y0
-    zmcmc = la$z
-    vmcmc = la$v
-    loglikmcmc = la$lp__
-    
     if(plotTheta == T)
     {
       for(i in 1:8)
@@ -206,15 +244,6 @@ generatePlots = function(stanfit, plotDensity = T, plotTrace = F, plotTheta = T,
   }
   if(plotTrace == T)
   {
-    nonpermutedvalues = extract(stanfit,permuted=F)
-    nonpermutedvalues[1,1,1]
-    
-    thetamcmc = nonpermutedvalues[,1,8:15]
-    y0mcmc = nonpermutedvalues[,1,16:20]
-    zmcmc = nonpermutedvalues[,1,2]
-    vmcmc = nonpermutedvalues[,1,1]
-    loglikmcmc = nonpermutedvalues[,1,21]
-    
     if(plotTheta == T)
     {
       for(i in 1:8)
