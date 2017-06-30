@@ -57,7 +57,7 @@ svdtransfromplot(stanfit = fit, Phi = 0, Theta = 100)
 mcmcdat = read.csv('50000relapse.csv', header=T)
 finalsolutionplot(mcmcData = mcmcdat, xdata = inputdata$Month, ydata = inputdata$BCR.ABL1.ABL1....)
 generatePlots(mcmcData = mcmcdat, plotDensity = T, plotTheta = T, ploty0 = T, plotz = T, plotv = T)
-svdtransfromplot(mcmcData = mcmcdat, Phi = 0, Theta = 100)
+svdtransfromplot(mcmcData = mcmcdat, Phi = 0, Theta = 30)
 
 #Functions
 
@@ -101,6 +101,7 @@ finalsolutionplot = function(stanfit = NULL, mcmcData = NULL, xdata, ydata)
   
   print(theta)
   print(y0)
+  print(loglikmcmc[max_index])
   
   parameters = c(ax = theta[1], bx = theta[2], cx = theta[3],
                  dx = theta[4], ex = theta[5], ay = theta[6],
