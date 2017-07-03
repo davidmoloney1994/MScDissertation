@@ -19,45 +19,58 @@ standata = list(T = length(inputdata[,1]),
                           ts = inputdata$Month[-1])
 
 fit <- stan(file = 'MScDissertation/odemcmc.stan', data = standata, 
-            iter = 1000, chains = 1)
+            iter = 100, chains = 1)
 
 print(fit)
 get_inits(fit)
 
-finalsolutionplot(stanfit = fit, xdata = inputdata$Month, ydata = inputdata$BCR.ABL1.ABL1....)
-generatePlots(stanfit = fit, plotDensity = T, plotTheta = T, ploty0 = T, plotz = T, plotv = T)
+sampleMcmcList = generateListData(fit, nruns = n)
+finalsolutionplot(mcmcList = sampleMcmcList, xdata = inputdata$Month, ydata = inputdata$BCR.ABL1.ABL1....)
+generatePlots(mcmcList = sampleMcmcList, plotDensity = T, plotTheta = T, ploty0 = T, plotz = T, plotv = T)
 
 svdtransfromplot(stanfit = fit, Phi = 0, Theta = 100)
 
 
-#y0remissioninit = c(0.289, 0.009, 0.006, 0.04, 0.066)
-#thetaremissioninit = c(0.7,0.7,0.6,0.5,0.1,0.1,0.1,0.9)
 
-#y0relapseinit = c(0.27,0.219,0.05,0.077,0.162)
-#thetarelapseinit = c(0.1,0.8,0.2,0.8,0.2,0.9,0.4,0.8)
+#Multiple runs
 
-#Full remission data, initialization for initial values
-#fit <- stan(file = 'MScDissertation/odemcmc.stan', data = luk_dat_remission, iter = 1000, chains = 1,
-#            init = list(list(y0temp=y0remissioninit/sum(y0remissioninit), z=sum(y0remissioninit))))
-#Full remission data, full initialization
-#fit <- stan(file = 'MScDissertation/odemcmc.stan', data = luk_dat_remission, iter = 100, chains = 1,
-#            init = list(list(y0temp=y0remissioninit/sum(y0remissioninit), z=sum(y0remissioninit), theta=thetaremissioninit)))
-#Patient 25, initial value initialization
-#fit <- stan(file = 'MScDissertation/odemcmc.stan', data = luk_dat_relapse25, iter = 1000, chains = 1,
-#            init = list(list(y0temp=y0relapseinit/sum(y0relapseinit), z=sum(y0relapseinit))))
-#Patient 25, full initialization
-#fit <- stan(file = 'MScDissertation/odemcmc.stan', data = luk_dat_relapse25, iter = 1000, chains = 1,
-#            init = list(list(y0temp=y0relapseinit/sum(y0relapseinit), z=sum(y0relapseinit), theta=thetarelapseinit)))
+
+inputdata = setRemissionData(data, showPlot = T)
+inputdata = setPatientData(data, 25, showPlot = T)
+
+standata = list(T = length(inputdata[,1]), 
+                R = inputdata$BCR.ABL1.ABL1....,
+                t0 = 0,
+                ts = inputdata$Month[-1])
+
+n = 5
+
+fit <- stan(file = 'MScDissertation/odemcmc.stan', data = standata, 
+              iter = 1000, chains = n)
+
+sampleMcmcList = generateListData(fit, nruns = n)
+finalsolutionplot(mcmcList = sampleMcmcList, xdata = inputdata$Month, ydata = inputdata$BCR.ABL1.ABL1....)
+generatePlots(mcmcList = sampleMcmcList, plotDensity = T, plotTheta = T, ploty0 = T, plotz = T, plotv = T)
+generatePlots(mcmcList = sampleMcmcList, plotDensity = F, plotTrace = T, plotTheta = T, ploty0 = T, plotz = T, plotv = T)
 
 
 
 
 #Write and read to file
-#write.csv(extract(fit,permuted=T), file='50000relapse.csv')
+
+#write.csv(extract(fit,permuted=T), file='50000relapse.csv', row.names=F)
 mcmcdat = read.csv('50000relapse.csv', header=T)
-finalsolutionplot(mcmcData = mcmcdat, xdata = inputdata$Month, ydata = inputdata$BCR.ABL1.ABL1....)
-generatePlots(mcmcData = mcmcdat, plotDensity = T, plotTheta = T, ploty0 = T, plotz = T, plotv = T)
+sampleMcmcList = generateListData(mcmcData = mcmcdat)
+finalsolutionplot(mcmcList = sampleMcmcList, xdata = inputdata$Month, ydata = inputdata$BCR.ABL1.ABL1....)
+generatePlots(mcmcList = sampleMcmcList, plotDensity = T, plotTheta = T, ploty0 = T, plotz = T, plotv = T)
 svdtransfromplot(mcmcData = mcmcdat, Phi = 0, Theta = 30)
+
+
+
+
+
+
+
 
 #Functions
 
@@ -73,49 +86,70 @@ desystem = function(t, state, parameters) {
   })
 }
 
-#Plots the data and the ode solution using the best stan outputs
-finalsolutionplot = function(stanfit = NULL, mcmcData = NULL, xdata, ydata)
+
+generateListData = function(stanfit = NULL, mcmcData = NULL, nruns = 1)
 {
-  plot(xdata, ydata, ylim=c(0,1), xlim=c(0, max(xdata)+5))
+  tempList = vector("list", nruns)
   
   if(is.null(mcmcData))
   {
-    la = extract(stanfit, permuted = T) # return a list of arrays 
-    thetamcmc = la$theta
-    y0mcmc = la$y0
-    loglikmcmc = la$lp__
+    la = as.array(stanfit)
+
+    for(i in seq_len(nruns))
+      tempList[[i]] = la[,i,]
   }
   else
   {
-    mcmcData = as.matrix(mcmcData)
-    colnames(mcmcData) = NULL
-    thetamcmc = mcmcData[,9:16]
-    y0mcmc = mcmcData[,17:21]
-    loglikmcmc = mcmcData[,22]
+    tempList[[1]] = mcmcData
   }
-  
-  max_index = which.max(loglikmcmc)
-  
-  theta = thetamcmc[max_index,]
-  y0 = y0mcmc[max_index,]
-  
-  print(theta)
-  print(y0)
-  print(loglikmcmc[max_index])
-  
-  parameters = c(ax = theta[1], bx = theta[2], cx = theta[3],
-                 dx = theta[4], ex = theta[5], ay = theta[6],
-                 by = theta[7], ey = theta[8])
-  
-  state = c(x0 = y0[1], x1 = y0[2], x2 = y0[3], y0 = y0[4], y1 = y0[5])
-  
-  times = seq(0, max(xdata) + 5, by = 0.1)
-  out = ode(y = state, times = times, func = desystem, parms = parameters)
-  head(out)
-  
-  R = out[,6]/(out[,6] + 2*out[,4])
-  lines(out[,1], R, col='red')
+  return(tempList)
 }
+
+
+finalsolutionplot = function(mcmcList = NULL, xdata, ydata)
+{
+  nruns = length(mcmcList)
+  
+  for(i in seq_len(nruns))
+  {
+    
+    if(i == 1)
+      plot(xdata, ydata, ylim=c(0,1), xlim=c(0, max(xdata)+5))
+    
+    #Set parameters
+    mcmcData = as.matrix(mcmcList[[i]])
+    colnames(mcmcData) = NULL
+    thetamcmc = mcmcData[,8:15]
+    y0mcmc = mcmcData[,16:20]
+    vmcmc = mcmcData[,1]
+    zmcmc = mcmcData[,2]
+    loglikmcmc = mcmcData[,21]
+    
+    max_index = which.max(loglikmcmc)
+    
+    theta = thetamcmc[max_index,]
+    y0 = y0mcmc[max_index,]
+    
+    print(theta)
+    print(y0)
+    print(loglikmcmc[max_index])
+    
+    parameters = c(ax = theta[1], bx = theta[2], cx = theta[3],
+                   dx = theta[4], ex = theta[5], ay = theta[6],
+                   by = theta[7], ey = theta[8])
+    
+    state = c(x0 = y0[1], x1 = y0[2], x2 = y0[3], y0 = y0[4], y1 = y0[5])
+    
+    times = seq(0, max(xdata) + 5, by = 0.1)
+    out = ode(y = state, times = times, func = desystem, parms = parameters)
+    head(out)
+    
+    R = out[,6]/(out[,6] + 2*out[,4])
+    lines(out[,1], R, col=i+1)
+  }
+}
+
+
 
 #plots the svd transform of the mcmc output in 3d
 svdtransfromplot = function(stanfit = NULL, mcmcData = NULL, Phi=30, Theta=30)
@@ -131,9 +165,11 @@ svdtransfromplot = function(stanfit = NULL, mcmcData = NULL, Phi=30, Theta=30)
   {
     mcmcData = as.matrix(mcmcData)
     colnames(mcmcData) = NULL
-    thetamcmc = mcmcData[,9:16]
-    y0mcmc = mcmcData[,17:21]
-    vmcmc = mcmcData[,2]
+    thetamcmc = mcmcData[,8:15]
+    y0mcmc = mcmcData[,16:20]
+    vmcmc = mcmcData[,1]
+    zmcmc = mcmcData[,2]
+    loglikmcmc = mcmcData[,21]
   }
   
   n=14
@@ -197,50 +233,108 @@ setRemissionData = function(fulldata, showPlot=F)
 }
 
 #Generate Density and Trace plots from mcmc output
-generatePlots = function(stanfit = NULL, mcmcData = NULL, plotDensity = T, plotTrace = F, plotTheta = T, ploty0 = F, plotz = F, plotv = F, plotloglik = F)
+generatePlots = function(mcmcList = NULL, plotDensity = T, plotTrace = F, plotTheta = T, ploty0 = F, plotz = F, plotv = F, plotloglik = F)
 {
-  if(is.null(mcmcData))
-  {
-    nonpermutedvalues = extract(stanfit,permuted=F)
-    thetamcmc = nonpermutedvalues[,1,8:15]
-    y0mcmc = nonpermutedvalues[,1,16:20]
-    zmcmc = nonpermutedvalues[,1,2]
-    vmcmc = nonpermutedvalues[,1,1]
-    loglikmcmc = nonpermutedvalues[,1,21]
-  }
-  else
-  {
-    mcmcData = as.matrix(mcmcData)
-    colnames(mcmcData) = NULL
-    thetamcmc = mcmcData[,9:16]
-    y0mcmc = mcmcData[,17:21]
-    zmcmc = mcmcData[,3]
-    vmcmc = mcmcData[,2]
-    loglikmcmc = mcmcData[,22]
-  }
+  mcmcList = sampleMcmcList
+  nruns = length(mcmcList)
+
   if(plotDensity == T)
   {
     if(plotTheta == T)
     {
       for(i in 1:8)
-        plot(density(thetamcmc[,i]), main=paste("Density of theta",i))
+      {
+        for(j in seq_len(nruns))
+        {
+          mcmcData = mcmcList[[j]]
+          colnames(mcmcData) = NULL
+          thetamcmc = mcmcData[,8:15]
+          y0mcmc = mcmcData[,16:20]
+          vmcmc = mcmcData[,1]
+          zmcmc = mcmcData[,2]
+          loglikmcmc = mcmcData[,21]
+          
+          if(j == 1)
+            plot(density(thetamcmc[,i]), main=paste("Density of theta",i), col=j+1)
+          else
+            lines(density(thetamcmc[,i]), col=j+1)
+        }
+      }
     }
     if(ploty0 == T)
     {
       for(i in 1:5)
-        plot(density(y0mcmc[,i]),main=paste("Density of y0 for ode",i))
+      {
+        for(j in seq_len(nruns))
+        {
+          mcmcData = mcmcList[[j]]
+          colnames(mcmcData) = NULL
+          thetamcmc = mcmcData[,8:15]
+          y0mcmc = mcmcData[,16:20]
+          vmcmc = mcmcData[,1]
+          zmcmc = mcmcData[,2]
+          loglikmcmc = mcmcData[,21]
+          
+          if(j == 1)
+            plot(density(y0mcmc[,i]), main=paste("Density of y0 for ode",i), col=j+1)
+          else
+            lines(density(y0mcmc[,i]), col=j+1)
+        }
+      }
     }
     if(plotz == T)
     {
-      plot(density(zmcmc), main="Density of z")
+      for(j in seq_len(nruns))
+      {
+        mcmcData = mcmcList[[j]]
+        colnames(mcmcData) = NULL
+        thetamcmc = mcmcData[,8:15]
+        y0mcmc = mcmcData[,16:20]
+        vmcmc = mcmcData[,1]
+        zmcmc = mcmcData[,2]
+        loglikmcmc = mcmcData[,21]
+        
+        if(j == 1)
+          plot(density(zmcmc), main="Density of z", col=j+1)
+        else
+          lines(density(zmcmc), col=j+1)
+      }
     }
     if(plotv == T)
     {
-      plot(density(vmcmc), main="Density of v")
+      for(j in seq_len(nruns))
+      {
+        mcmcData = mcmcList[[j]]
+        colnames(mcmcData) = NULL
+        thetamcmc = mcmcData[,8:15]
+        y0mcmc = mcmcData[,16:20]
+        vmcmc = mcmcData[,1]
+        zmcmc = mcmcData[,2]
+        loglikmcmc = mcmcData[,21]
+        
+        if(j == 1)
+          plot(density(vmcmc), main="Density of v", col=j+1)
+        else
+          lines(density(vmcmc), col=j+1)
+      }
     }
     if(plotv == T)
     {
-      plot(density(loglikmcmc), main="Density of Posterior Log Likelihood")
+      for(j in seq_len(nruns))
+      {
+        mcmcData = mcmcList[[j]]
+        colnames(mcmcData) = NULL
+        thetamcmc = mcmcData[,8:15]
+        y0mcmc = mcmcData[,16:20]
+        vmcmc = mcmcData[,1]
+        zmcmc = mcmcData[,2]
+        loglikmcmc = mcmcData[,21]
+        
+        if(j == 1)
+          plot(density(loglikmcmc), main="Density of Posterior Log-Likelihood", col=j+1)
+        else
+          lines(density(loglikmcmc), col=j+1)
+      }
     }
   }
   if(plotTrace == T)
@@ -248,25 +342,100 @@ generatePlots = function(stanfit = NULL, mcmcData = NULL, plotDensity = T, plotT
     if(plotTheta == T)
     {
       for(i in 1:8)
-        plot(thetamcmc[,i], main=paste("Trace of theta",i), type='l')
+      {
+        for(j in seq_len(nruns))
+        {
+          mcmcData = mcmcList[[j]]
+          colnames(mcmcData) = NULL
+          thetamcmc = mcmcData[,8:15]
+          y0mcmc = mcmcData[,16:20]
+          vmcmc = mcmcData[,1]
+          zmcmc = mcmcData[,2]
+          loglikmcmc = mcmcData[,21]
+          
+          if(j == 1)
+            plot(thetamcmc[,i], main=paste("Trace of theta",i), type='l', col=j+1)
+          else
+            lines(thetamcmc[,i], col=j+1)
+        }
+      }
+      
     }
     if(ploty0 == T)
     {
       for(i in 1:5)
-        plot(y0mcmc[,i],main=paste("Trace of y0 for ode",i), type='l')
+      {
+        for(j in seq_len(nruns))
+        {
+          mcmcData = mcmcList[[j]]
+          colnames(mcmcData) = NULL
+          thetamcmc = mcmcData[,8:15]
+          y0mcmc = mcmcData[,16:20]
+          vmcmc = mcmcData[,1]
+          zmcmc = mcmcData[,2]
+          loglikmcmc = mcmcData[,21]
+          
+          if(j == 1)
+            plot(y0mcmc[,i],main=paste("Trace of y0 for ode",i), type='l', col=j+1)
+          else
+            lines(y0mcmc[,i], col=j+1)
+        }
+      }
+      
     }
     if(plotz == T)
     {
-      plot(zmcmc,main="Trace of z", type='l')
+      for(j in seq_len(nruns))
+      {
+        mcmcData = mcmcList[[j]]
+        colnames(mcmcData) = NULL
+        thetamcmc = mcmcData[,8:15]
+        y0mcmc = mcmcData[,16:20]
+        vmcmc = mcmcData[,1]
+        zmcmc = mcmcData[,2]
+        loglikmcmc = mcmcData[,21]
+        
+        if(j == 1)
+          plot(zmcmc, main="Trace of z", type='l', col = j+1)
+        else
+          lines(zmcmc, col = j+1)
+      }
     }
     if(plotv == T)
     {
-      plot(vmcmc,main="Trace of v", type='l')
+      for(j in seq_len(nruns))
+      {
+        mcmcData = mcmcList[[j]]
+        colnames(mcmcData) = NULL
+        thetamcmc = mcmcData[,8:15]
+        y0mcmc = mcmcData[,16:20]
+        vmcmc = mcmcData[,1]
+        zmcmc = mcmcData[,2]
+        loglikmcmc = mcmcData[,21]
+        
+        if(j == 1)
+          plot(vmcmc,main="Trace of v", type='l', col = j+1)
+        else
+          lines(vmcmc, col = j+1)
+      }
     }
     if(plotloglik == T)
     {
-      plot(loglikmcmc,main="Trace of Posterior Log Likelihood", type='l')
+      for(j in seq_len(nruns))
+      {
+        mcmcData = mcmcList[[j]]
+        colnames(mcmcData) = NULL
+        thetamcmc = mcmcData[,8:15]
+        y0mcmc = mcmcData[,16:20]
+        vmcmc = mcmcData[,1]
+        zmcmc = mcmcData[,2]
+        loglikmcmc = mcmcData[,21]
+        
+        if(j == 1)
+          plot(loglikmcmc,main="Trace of Posterior Log Likelihood", type='l', col = j+1)
+        else
+          lines(loglikmcmc, col = j+1)
+      }
     }
   }
 }
-
