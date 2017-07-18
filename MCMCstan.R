@@ -50,7 +50,7 @@ fit <- stan(file = 'MScDissertation/odemcmc.stan', data = standata,
 
 sampleMcmcList = generateListData(fit, nruns = n)
 
-par(mfrow = c(1,1))
+par(mfrow = c(3,2))
 finalsolutionplot(mcmcList = sampleMcmcList, xdata = inputdata$Month, ydata = inputdata$BCR.ABL1.ABL1....)
 generatePlots(mcmcList = sampleMcmcList, plotDensity = T, plotTheta = T, ploty0 = T, plotz = T, plotv = T)
 generatePlots(mcmcList = sampleMcmcList, plotDensity = F, plotTrace = T, plotTheta = F, ploty0 = F, plotz = F, plotv = F, plotloglik = T)
@@ -115,7 +115,7 @@ finalsolutionplot = function(mcmcList = NULL, xdata, ydata)
   {
     
     if(i == 1)
-      plot(xdata, ydata, ylim=c(0,1), xlim=c(0, max(xdata)+5))
+      plot(xdata, ydata, ylim=c(0,1), xlim=c(0, max(xdata)+5), main="Final Solution")
     
     #Set parameters
     mcmcData = as.matrix(mcmcList[[i]])
@@ -181,7 +181,7 @@ IndividualSolutionPlot = function(mcmcList = NULL, xdata, ydata)
       out = ode(y = state, times = times, func = desystem, parms = parameters)
 
       if(i == 1)
-        plot(times, out[,j+1], ylim=c(0,1), xlim=c(0, max(xdata)+5), main=paste("ODE Solution Variable",j), type='l')
+        plot(times, out[,j+1], ylim=c(0,1), xlim=c(0, max(xdata)+5), ylab=paste("Proportion of Variable",j), main = paste("Trace of Variable",j), type='l')
       else
         lines(times, out[,j+1], col=i+1)
     }
