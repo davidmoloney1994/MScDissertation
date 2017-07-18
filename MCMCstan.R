@@ -1,5 +1,4 @@
 setwd('/Users/David/Dropbox/Oxford/Dissertation/')
-getwd()
 
 library(rstan)
 rstan_options(auto_write = TRUE)
@@ -43,17 +42,19 @@ standata = list(T = length(inputdata[,1]),
                 t0 = 0,
                 ts = inputdata$Month[-1])
 
-n = 5
+n = 8
 
 fit <- stan(file = 'MScDissertation/odemcmc.stan', data = standata, 
-              iter = 1000, chains = n)
+              iter = 20000, chains = n, warmup = 2000)
+
 
 sampleMcmcList = generateListData(fit, nruns = n)
+
+par(mfrow = c(1,1))
 finalsolutionplot(mcmcList = sampleMcmcList, xdata = inputdata$Month, ydata = inputdata$BCR.ABL1.ABL1....)
 generatePlots(mcmcList = sampleMcmcList, plotDensity = T, plotTheta = T, ploty0 = T, plotz = T, plotv = T)
-generatePlots(mcmcList = sampleMcmcList, plotDensity = F, plotTrace = T, plotTheta = T, ploty0 = T, plotz = T, plotv = T)
-
-
+generatePlots(mcmcList = sampleMcmcList, plotDensity = F, plotTrace = T, plotTheta = F, ploty0 = F, plotz = F, plotv = F, plotloglik = T)
+IndividualSolutionPlot(mcmcList = sampleMcmcList, xdata = inputdata$Month, ydata = inputdata$BCR.ABL1.ABL1....)
 
 
 #Write and read to file
@@ -142,13 +143,50 @@ finalsolutionplot = function(mcmcList = NULL, xdata, ydata)
     
     times = seq(0, max(xdata) + 5, by = 0.1)
     out = ode(y = state, times = times, func = desystem, parms = parameters)
-    head(out)
     
     R = out[,6]/(out[,6] + 2*out[,4])
     lines(out[,1], R, col=i+1)
   }
 }
 
+IndividualSolutionPlot = function(mcmcList = NULL, xdata, ydata)
+{
+  nruns = length(mcmcList)
+  
+  for(j in 1:5)
+  {
+    for(i in seq_len(nruns))
+    {
+      #Set parameters
+      mcmcData = as.matrix(mcmcList[[i]])
+      colnames(mcmcData) = NULL
+      thetamcmc = mcmcData[,8:15]
+      y0mcmc = mcmcData[,16:20]
+      vmcmc = mcmcData[,1]
+      zmcmc = mcmcData[,2]
+      loglikmcmc = mcmcData[,21]
+      
+      max_index = which.max(loglikmcmc)
+      
+      theta = thetamcmc[max_index,]
+      y0 = y0mcmc[max_index,]
+      
+      parameters = c(ax = theta[1], bx = theta[2], cx = theta[3],
+                     dx = theta[4], ex = theta[5], ay = theta[6],
+                     by = theta[7], ey = theta[8])
+      
+      state = c(x0 = y0[1], x1 = y0[2], x2 = y0[3], y0 = y0[4], y1 = y0[5])
+      
+      times = seq(0, max(xdata) + 5, by = 0.1)
+      out = ode(y = state, times = times, func = desystem, parms = parameters)
+
+      if(i == 1)
+        plot(times, out[,j+1], ylim=c(0,1), xlim=c(0, max(xdata)+5), main=paste("ODE Solution Variable",j), type='l')
+      else
+        lines(times, out[,j+1], col=i+1)
+    }
+  }
+}
 
 
 #plots the svd transform of the mcmc output in 3d

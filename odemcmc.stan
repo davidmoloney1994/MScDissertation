@@ -20,7 +20,7 @@ model {      	real y_hat[T-1,5];
 	z ~ beta(4,1);
 	R_hat[1] = y0[5]/(y0[5] + 2 * y0[3]);
 	//sigma[1] = sqrt(log((v/(R_hat[1]^2)) + 1));
-	//R[1] ~ lognormal(log(R_hat[1]) - (sigma^2)/2 , sigma);
+	//R[1] ~ lognormal(log(R_hat[1]) - (v^2)/2 , v);
 	R[1] ~ normal(R_hat[1], sqrt(v));
 	//R[1] ~ lognormal(log(R_hat[1]) - (sigma[1]^2)/2 , sigma[1]);
 
@@ -28,7 +28,7 @@ model {      	real y_hat[T-1,5];
 
       	for (t in 2:T) {
 		R_hat[t] = y_hat[t-1,5]/(y_hat[t-1,5] + 2 * y_hat[t-1,3]);
-		//sigma[t] = sqrt(log((v/(R_hat[t]^2)) + 1));        	//R[t] ~ lognormal(log(R_hat[t]) - (sigma^2)/2 , sigma);
+		//sigma[t] = sqrt(log((v/(R_hat[t]^2)) + 1));        	//R[t] ~ lognormal(log(R_hat[t]) - (v^2)/2 , v);
 		R[t] ~ normal(R_hat[t], sqrt(v));
 		//R[t] ~ lognormal(log(R_hat[t]) - (sigma[t]^2)/2 , sigma[t]);
       	}}
