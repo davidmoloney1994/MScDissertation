@@ -52,10 +52,11 @@ sampleMcmcList = generateListData(fit, nruns = n)
 
 par(mfrow = c(3,2))
 finalsolutionplot(mcmcList = sampleMcmcList, xdata = inputdata$Month, ydata = inputdata$BCR.ABL1.ABL1....)
+finalsolutionplot(mcmcList = sampleMcmcList, xdata = inputdata$Month, ydata = inputdata$BCR.ABL1.ABL1...., meanSol = T)
 generatePlots(mcmcList = sampleMcmcList, plotDensity = T, plotTheta = T, ploty0 = T, plotz = T, plotv = T)
 generatePlots(mcmcList = sampleMcmcList, plotDensity = F, plotTrace = T, plotTheta = F, ploty0 = F, plotz = F, plotv = F, plotloglik = T)
 IndividualSolutionPlot(mcmcList = sampleMcmcList, xdata = inputdata$Month, ydata = inputdata$BCR.ABL1.ABL1....)
-
+PlotSampleSolutions(mcmcList = sampleMcmcList, xdata = inputdata$Month, ydata = inputdata$BCR.ABL1.ABL1...., numSamples = 50)
 
 #Write and read to file
 
@@ -107,7 +108,7 @@ generateListData = function(stanfit = NULL, mcmcData = NULL, nruns = 1)
 }
 
 
-finalsolutionplot = function(mcmcList = NULL, xdata, ydata)
+finalsolutionplot = function(mcmcList = NULL, xdata, ydata, meanSol = F)
 {
   nruns = length(mcmcList)
   
@@ -126,14 +127,82 @@ finalsolutionplot = function(mcmcList = NULL, xdata, ydata)
     zmcmc = mcmcData[,2]
     loglikmcmc = mcmcData[,21]
     
-    max_index = which.max(loglikmcmc)
     
-    theta = thetamcmc[max_index,]
-    y0 = y0mcmc[max_index,]
+    if(meanSol == T)
+    {
+      mcmcLen = dim(mcmcData)[1]
+      
+      times = seq(0, max(xdata) + 5, by = 0.1)
+      R = matrix(nrow = mcmcLen, ncol = length(times))
+      for(j in seq_len(mcmcLen))
+      {
+        theta = thetamcmc[j,]
+        y0 = y0mcmc[j,]
+        
+        parameters = c(ax = theta[1], bx = theta[2], cx = theta[3],
+                       dx = theta[4], ex = theta[5], ay = theta[6],
+                       by = theta[7], ey = theta[8])
+        
+        state = c(x0 = y0[1], x1 = y0[2], x2 = y0[3], y0 = y0[4], y1 = y0[5])
+        
+        out = ode(y = state, times = times, func = desystem, parms = parameters)
+        
+        R[j,] = out[,6]/(out[,6] + 2*out[,4])
+      }
+      meanR = apply(R,2,mean)
+      lines(times, meanR, col=i+1)
+    }
     
-    print(theta)
-    print(y0)
-    print(loglikmcmc[max_index])
+    else
+    {
+      max_index = which.max(loglikmcmc)
+      
+      theta = thetamcmc[max_index,]
+      y0 = y0mcmc[max_index,]
+      
+      print(theta)
+      print(y0)
+      print(loglikmcmc[max_index])
+      
+      parameters = c(ax = theta[1], bx = theta[2], cx = theta[3],
+                     dx = theta[4], ex = theta[5], ay = theta[6],
+                     by = theta[7], ey = theta[8])
+      
+      state = c(x0 = y0[1], x1 = y0[2], x2 = y0[3], y0 = y0[4], y1 = y0[5])
+      
+      times = seq(0, max(xdata) + 5, by = 0.1)
+      out = ode(y = state, times = times, func = desystem, parms = parameters)
+      
+      R = out[,6]/(out[,6] + 2*out[,4])
+      lines(out[,1], R, col=i+1)
+    }
+  }
+}
+
+PlotSampleSolutions = function(mcmcList = NULL, xdata, ydata, numSamples = 50)
+{
+  nruns = length(mcmcList)
+  mcmcData = NULL
+  for(i in seq_len(nruns))
+    mcmcData = rbind(mcmcData, as.matrix(mcmcList[[i]]))
+  
+  colnames(mcmcData) = NULL
+  thetamcmc = mcmcData[,8:15]
+  y0mcmc = mcmcData[,16:20]
+  vmcmc = mcmcData[,1]
+  zmcmc = mcmcData[,2]
+  loglikmcmc = mcmcData[,21]
+  
+  sampleInd = sample(seq_len(dim(mcmcData)[1]), numSamples)
+  
+  plot(xdata, ydata, ylim=c(0,1), xlim=c(0, max(xdata)+5), main="Sample Solutions")
+  
+  times = seq(0, max(xdata) + 5, by = 0.1)
+  
+  for(i in sampleInd)
+  {
+    theta = thetamcmc[i,]
+    y0 = y0mcmc[i,]
     
     parameters = c(ax = theta[1], bx = theta[2], cx = theta[3],
                    dx = theta[4], ex = theta[5], ay = theta[6],
@@ -141,12 +210,12 @@ finalsolutionplot = function(mcmcList = NULL, xdata, ydata)
     
     state = c(x0 = y0[1], x1 = y0[2], x2 = y0[3], y0 = y0[4], y1 = y0[5])
     
-    times = seq(0, max(xdata) + 5, by = 0.1)
     out = ode(y = state, times = times, func = desystem, parms = parameters)
     
     R = out[,6]/(out[,6] + 2*out[,4])
-    lines(out[,1], R, col=i+1)
+    lines(times, R, col=8, lwd = 1)
   }
+  points(xdata, ydata)
 }
 
 IndividualSolutionPlot = function(mcmcList = NULL, xdata, ydata)
@@ -215,7 +284,7 @@ svdtransfromplot = function(stanfit = NULL, mcmcData = NULL, Phi=30, Theta=30)
   m = cbind(thetamcmc,
             y0mcmc,
             vmcmc)
-  
+
   decomp = svd(m)
   sig = matrix(c(decomp$d[1], rep(0,n), decomp$d[2], rep(0, n), decomp$d[3], rep(0, n-3)), nrow=n)
   transform = decomp$u %*% sig
