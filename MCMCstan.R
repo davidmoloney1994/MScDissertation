@@ -5,6 +5,7 @@ rstan_options(auto_write = TRUE)
 options(mc.cores = parallel::detectCores())
 library(deSolve)
 library(plot3D)
+library(scatterplot3d)
 
 data = read.csv("datatest.csv", header=T, stringsAsFactors=F)
 
@@ -42,10 +43,10 @@ standata = list(T = length(inputdata[,1]),
                 t0 = 0,
                 ts = inputdata$Month[-1])
 
-n = 8
+n = 4
 
 fit <- stan(file = 'MScDissertation/odemcmc.stan', data = standata, 
-              iter = 20000, chains = n, warmup = 2000)
+              iter = 2000, chains = n, warmup = 1000)
 
 
 sampleMcmcList = generateListData(fit, nruns = n)
@@ -56,7 +57,10 @@ finalsolutionplot(mcmcList = sampleMcmcList, xdata = inputdata$Month, ydata = in
 generatePlots(mcmcList = sampleMcmcList, plotDensity = T, plotTheta = T, ploty0 = T, plotz = T, plotv = T)
 generatePlots(mcmcList = sampleMcmcList, plotDensity = F, plotTrace = T, plotTheta = F, ploty0 = F, plotz = F, plotv = F, plotloglik = T)
 IndividualSolutionPlot(mcmcList = sampleMcmcList, xdata = inputdata$Month, ydata = inputdata$BCR.ABL1.ABL1....)
-PlotSampleSolutions(mcmcList = sampleMcmcList, xdata = inputdata$Month, ydata = inputdata$BCR.ABL1.ABL1...., numSamples = 50)
+PlotSampleSolutions(mcmcList = sampleMcmcList, xdata = inputdata$Month, ydata = inputdata$BCR.ABL1.ABL1...., numSamples = 50, plotIndSamples = T)
+svdtransfromplot(mcmcList  = sampleMcmcList, angle = 20, dim=2)
+
+
 
 #Write and read to file
 
@@ -65,7 +69,7 @@ mcmcdat = read.csv('50000relapse.csv', header=T)
 sampleMcmcList = generateListData(mcmcData = mcmcdat)
 finalsolutionplot(mcmcList = sampleMcmcList, xdata = inputdata$Month, ydata = inputdata$BCR.ABL1.ABL1....)
 generatePlots(mcmcList = sampleMcmcList, plotDensity = T, plotTheta = T, ploty0 = T, plotz = T, plotv = T)
-svdtransfromplot(mcmcData = mcmcdat, Phi = 0, Theta = 30)
+svdtransfromplot(mcmcData = mcmcdat, angle = 20, dim=3)
 
 
 
@@ -179,7 +183,7 @@ finalsolutionplot = function(mcmcList = NULL, xdata, ydata, meanSol = F)
   }
 }
 
-PlotSampleSolutions = function(mcmcList = NULL, xdata, ydata, numSamples = 50)
+PlotSampleSolutions = function(mcmcList = NULL, xdata, ydata, numSamples = 50, plotIndSamples = F)
 {
   nruns = length(mcmcList)
   mcmcData = NULL
@@ -195,14 +199,16 @@ PlotSampleSolutions = function(mcmcList = NULL, xdata, ydata, numSamples = 50)
   
   sampleInd = sample(seq_len(dim(mcmcData)[1]), numSamples)
   
+  tempList = vector("list", numSamples)
+  
   plot(xdata, ydata, ylim=c(0,1), xlim=c(0, max(xdata)+5), main="Sample Solutions")
   
   times = seq(0, max(xdata) + 5, by = 0.1)
   
-  for(i in sampleInd)
+  for(i in seq_len(numSamples))
   {
-    theta = thetamcmc[i,]
-    y0 = y0mcmc[i,]
+    theta = thetamcmc[sampleInd[i],]
+    y0 = y0mcmc[sampleInd[i],]
     
     parameters = c(ax = theta[1], bx = theta[2], cx = theta[3],
                    dx = theta[4], ex = theta[5], ay = theta[6],
@@ -212,10 +218,29 @@ PlotSampleSolutions = function(mcmcList = NULL, xdata, ydata, numSamples = 50)
     
     out = ode(y = state, times = times, func = desystem, parms = parameters)
     
+    tempList[[i]] = out
+    
     R = out[,6]/(out[,6] + 2*out[,4])
     lines(times, R, col=8, lwd = 1)
   }
   points(xdata, ydata)
+  
+  if(plotIndSamples == T)
+  {
+    for(j in 1:5)
+    {
+      for(i in seq_len(numSamples))
+      {
+        tempout = tempList[[i]]
+        if(i == 1)
+          plot(tempout[,j+1], main = paste("Proportion of Variable",j), ylim = c(0,1), type = 'l', col=8, lwd=1)
+        else
+          lines(tempout[,j+1], col=8, lwd=1)
+      }
+    }
+  }
+  
+  
 }
 
 IndividualSolutionPlot = function(mcmcList = NULL, xdata, ydata)
@@ -259,14 +284,21 @@ IndividualSolutionPlot = function(mcmcList = NULL, xdata, ydata)
 
 
 #plots the svd transform of the mcmc output in 3d
-svdtransfromplot = function(stanfit = NULL, mcmcData = NULL, Phi=30, Theta=30)
+svdtransfromplot = function(mcmcList = NULL, mcmcData = NULL, angle = 30, dim = 3)
 {
   if(is.null(mcmcData))
   {
-    la = extract(stanfit, permuted = T) # return a list of arrays 
-    thetamcmc = la$theta
-    y0mcmc = la$y0
-    vmcmc = la$v
+    nruns = length(mcmcList)
+    mcmcData = NULL
+    for(i in seq_len(nruns))
+      mcmcData = rbind(mcmcData, as.matrix(mcmcList[[i]]))
+    
+    colnames(mcmcData) = NULL
+    thetamcmc = mcmcData[,8:15]
+    y0mcmc = mcmcData[,16:20]
+    vmcmc = mcmcData[,1]
+    zmcmc = mcmcData[,2]
+    loglikmcmc = mcmcData[,21]
   }
   else
   {
@@ -279,16 +311,30 @@ svdtransfromplot = function(stanfit = NULL, mcmcData = NULL, Phi=30, Theta=30)
     loglikmcmc = mcmcData[,21]
   }
   
-  n=14
-  
   m = cbind(thetamcmc,
             y0mcmc,
             vmcmc)
-
+  
+  n = dim(m)[1]
+  k = dim(m)[2]
+  
+  numSamples = floor(n/10)
+  
   decomp = svd(m)
-  sig = matrix(c(decomp$d[1], rep(0,n), decomp$d[2], rep(0, n), decomp$d[3], rep(0, n-3)), nrow=n)
-  transform = decomp$u %*% sig
-  scatter3D(transform[,1],transform[,2],transform[,3], col=1, phi=Phi, theta=Theta)
+  #sig = matrix(c(decomp$d[1], rep(0,n), decomp$d[2], rep(0, n), decomp$d[3], rep(0, n-3)), nrow=n)
+  #transform = decomp$u %*% sig
+  
+  plot(decomp$d)
+       
+  #transform = m %*% decomp$v[,1:dim]
+  transform = m %*% decomp$v[,c(1, k-1, k)]
+  ind = sample(seq_len(n), numSamples)
+  
+  xrange = max(transform[ind,1]) - min(transform[ind,1])
+  if(dim == 3)
+    scatterplot3d(transform[ind,1],transform[ind,2],transform[ind,3], angle = 30, ylim = c(mean(transform[ind,2]) - xrange/2, mean(transform[ind,2]) + xrange/2), zlim = c(mean(transform[ind,3]) - xrange/2, mean(transform[ind,3]) + xrange/2))
+  else
+    plot(transform[ind,1], transform[ind,2], ylim = c(mean(transform[ind,2]) - xrange/2, mean(transform[ind,2]) + xrange/2))
 }
 
 #Sets the patient data for a given patient
