@@ -5,6 +5,7 @@ rstan_options(auto_write = TRUE)
 options(mc.cores = parallel::detectCores())
 library(deSolve)
 library(plot3D)
+library(rBeta2009)
 library(scatterplot3d)
 
 data = read.csv("datatest.csv", header=T, stringsAsFactors=F)
@@ -41,12 +42,13 @@ inputdata = setPatientData(data, 25, showPlot = T)
 standata = list(T = length(inputdata[,1]), 
                 R = inputdata$BCR.ABL1.ABL1....,
                 t0 = 0,
-                ts = inputdata$Month[-1])
+                ts = inputdata$Month[-1],
+                alpha = c(0.9,0.9,0.6,0.9,2))
 
 n = 4
 
 fit <- stan(file = 'MScDissertation/odemcmc.stan', data = standata, 
-              iter = 2000, chains = n, warmup = 1000)
+              iter = 10000, chains = n, warmup = 1000)
 
 
 sampleMcmcList = generateListData(fit, nruns = n)
@@ -54,14 +56,20 @@ sampleMcmcList = generateListData(fit, nruns = n)
 par(mfrow = c(3,2))
 finalsolutionplot(mcmcList = sampleMcmcList, xdata = inputdata$Month, ydata = inputdata$BCR.ABL1.ABL1....)
 finalsolutionplot(mcmcList = sampleMcmcList, xdata = inputdata$Month, ydata = inputdata$BCR.ABL1.ABL1...., meanSol = T)
-generatePlots(mcmcList = sampleMcmcList, plotDensity = T, plotTheta = T, ploty0 = T, plotz = T, plotv = T)
+generatePlots(mcmcList = sampleMcmcList, plotDensity = T, plotTheta = T, ploty0 = T, plotz = T, plotv = T, plotR0 = T, plotloglik = T)
 generatePlots(mcmcList = sampleMcmcList, plotDensity = F, plotTrace = T, plotTheta = F, ploty0 = F, plotz = F, plotv = F, plotloglik = T)
 IndividualSolutionPlot(mcmcList = sampleMcmcList, xdata = inputdata$Month, ydata = inputdata$BCR.ABL1.ABL1....)
 PlotSampleSolutions(mcmcList = sampleMcmcList, xdata = inputdata$Month, ydata = inputdata$BCR.ABL1.ABL1...., numSamples = 50, plotIndSamples = T)
 svdtransfromplot(mcmcList  = sampleMcmcList, angle = 20, dim=2)
 
 
+#Prior Elic
 
+priorSampling(n = 50, plotTraces = T, plotDensities = F, alpha = c(0.9,0.9,0.6,0.9,2))
+priorSampling(n = 10000, plotTraces = F, plotDensities = T, alpha = c(0.9,0.9,0.6,0.9,2)) 
+  
+
+  
 #Write and read to file
 
 #write.csv(extract(fit,permuted=T), file='50000relapse.csv', row.names=F)
@@ -385,8 +393,121 @@ setRemissionData = function(fulldata, showPlot=F)
   return(remissionDat)
 }
 
+
+priorSampling = function(n = 10, plotDensities = T, plotTraces = F, alpha = c(1,1,1,1,1))
+{
+  z = runif(n)
+  #R0 = rbeta(n, 4,1)
+  ytemp = rdirichlet(n, alpha)
+  
+  
+  theta = matrix(runif(8*n), nrow = n)
+  
+  #ytemp = matrix(runif(5*n), nrow = n)
+  #ysum = apply(ytemp, 1, sum)
+  
+  #ytemp = ytemp/ysum
+  #y = ytemp
+  #y[,3] = (ytemp[,3] + ytemp[,5])*(1-R0)/(1+R0)
+  #y[,5] = (ytemp[,3] + ytemp[,5])*2*R0/(1+R0)
+  
+  y = z * ytemp
+  
+  R0 = y[,5]/(y[,5] + 2*y[,3])
+  
+  print(mean(R0))
+  
+  
+  if(plotDensities == T)
+  {
+    plot(density(theta[,1]), main="Prior density of theta 1")
+    plot(density(theta[,2]), main="Prior density of theta 2")
+    plot(density(theta[,3]), main="Prior density of theta 3")
+    plot(density(theta[,4]), main="Prior density of theta 4")
+    plot(density(theta[,5]), main="Prior density of theta 5")
+    plot(density(theta[,6]), main="Prior density of theta 6")
+    plot(density(theta[,7]), main="Prior density of theta 7")
+    plot(density(theta[,8]), main="Prior density of theta 8")
+    plot(density(y[,1]), main="Prior density of IC for x0")
+    plot(density(y[,2]), main="Prior density of IC for x1")
+    plot(density(y[,3]), main="Prior density of IC for x2")
+    plot(density(y[,4]), main="Prior density of IC for y0")
+    plot(density(y[,5]), main="Prior density of IC for y1")
+    plot(density(R0), main="Prior density of R0")
+    plot(density(z), main="Prior density of z")
+  }
+  
+  if(plotTraces == T)
+  {
+    times = seq(0, 65, by = 0.1)
+    R = matrix(nrow=n,ncol=length(times))
+    tempList = vector("list", n)
+    for(i in seq_len(n))
+    {
+      
+      parameters = c(ax = theta[i,1], bx = theta[i,2], cx = theta[i,3],
+                     dx = theta[i,4], ex = theta[i,5], ay = theta[i,6],
+                     by = theta[i,7], ey = theta[i,8])
+      
+      state = c(x0 = y[i,1], x1 = y[i,2], x2 = y[i,3], y0 = y[i,4], y1 = y[i,5])
+      
+      out = ode(y = state, times = times, func = desystem, parms = parameters)
+      tempList[[i]] = out
+    }
+    
+    for(i in seq_len(n))
+    {
+      out = tempList[[i]]
+      if(i == 1)
+        plot(times, out[,6]/(out[,6] + 2*out[,4]), xlab="time", ylab="R", ylim = c(0,1), type='l', col = i)
+      else
+        lines(times, out[,6]/(out[,6] + 2*out[,4]), col = i)
+    }
+    for(i in seq_len(n))
+    {
+      out = tempList[[i]]
+      if(i == 1)
+        plot(times, out[,2], xlab="time", ylab="R", ylim = c(0,1), col=i, type='l')
+      else
+        lines(times, out[,2], col = i)
+    }
+    for(i in seq_len(n))
+    {
+      out = tempList[[i]]
+      if(i == 1)
+        plot(times, out[,3], xlab="time", ylab=R, ylim = c(0,1), type = 'l', col=i)
+      else
+        lines(times, out[,3], col = i)
+    }
+    for(i in seq_len(n))
+    {
+      out = tempList[[i]]
+      if(i == 1)
+        plot(times, out[,4], xlab="time", ylab=R, ylim = c(0,1), type='l', col=i)
+      else
+        lines(times, out[,4], col = i)
+    }
+    for(i in seq_len(n))
+    {
+      out = tempList[[i]]
+      if(i == 1)
+        plot(times, out[,5], xlab="time", ylab=R, ylim = c(0,1), type='l', col=i)
+      else
+        lines(times, out[,5], col = i)
+    }
+    for(i in seq_len(n))
+    {
+      out = tempList[[i]]
+      if(i == 1)
+        plot(times, out[,6], xlab="time", ylab=R, ylim = c(0,1), type='l', col=i)
+      else
+        lines(times, out[,6], col = i)
+    }
+  }
+}
+
 #Generate Density and Trace plots from mcmc output
-generatePlots = function(mcmcList = NULL, plotDensity = T, plotTrace = F, plotTheta = T, ploty0 = F, plotz = F, plotv = F, plotloglik = F)
+generatePlots = function(mcmcList = NULL, plotDensity = T, plotTrace = F, plotTheta = T, ploty0 = F, plotz = F, plotv = F, plotloglik = F, plotR0 = F)
 {
   mcmcList = sampleMcmcList
   nruns = length(mcmcList)
@@ -435,6 +556,25 @@ generatePlots = function(mcmcList = NULL, plotDensity = T, plotTrace = F, plotTh
         }
       }
     }
+    if(plotR0 == T)
+    {
+      for(j in seq_len(nruns))
+      {
+        mcmcData = mcmcList[[j]]
+        colnames(mcmcData) = NULL
+        thetamcmc = mcmcData[,8:15]
+        y0mcmc = mcmcData[,16:20]
+        vmcmc = mcmcData[,1]
+        zmcmc = mcmcData[,2]
+        loglikmcmc = mcmcData[,21]
+        R0mcmc = y0mcmc[,5]/(y0mcmc[,5] + 2*y0mcmc[,3])
+        
+        if(j == 1)
+          plot(density(R0mcmc), main="Density of R0", col=j+1)
+        else
+          lines(density(R0mcmc), col=j+1)
+      }
+    }
     if(plotz == T)
     {
       for(j in seq_len(nruns))
@@ -471,7 +611,7 @@ generatePlots = function(mcmcList = NULL, plotDensity = T, plotTrace = F, plotTh
           lines(density(vmcmc), col=j+1)
       }
     }
-    if(plotv == T)
+    if(plotloglik == T)
     {
       for(j in seq_len(nruns))
       {
