@@ -17,7 +17,8 @@ inputdata = setPatientData(data, 25, showPlot = T)
 standata = list(T = length(inputdata[,1]), 
                           R = inputdata$BCR.ABL1.ABL1....,
                           t0 = 0,
-                          ts = inputdata$Month[-1])
+                          ts = inputdata$Month[-1],
+                          alpha = c(0.9,0.9,0.4,0.9,1.5))
 
 fit <- stan(file = 'MScDissertation/odemcmc.stan', data = standata, 
             iter = 100, chains = 1)
@@ -43,12 +44,12 @@ standata = list(T = length(inputdata[,1]),
                 R = inputdata$BCR.ABL1.ABL1....,
                 t0 = 0,
                 ts = inputdata$Month[-1],
-                alpha = c(0.9,0.9,0.6,0.9,2))
+                alpha = c(0.9,0.9,0.4,0.9,1.5))
 
 n = 4
 
 fit <- stan(file = 'MScDissertation/odemcmc.stan', data = standata, 
-              iter = 10000, chains = n, warmup = 1000)
+              iter = 1000, chains = n, warmup = 100)
 
 
 sampleMcmcList = generateListData(fit, nruns = n)
@@ -64,11 +65,17 @@ svdtransfromplot(mcmcList  = sampleMcmcList, angle = 20, dim=2)
 
 
 #Prior Elic
-
-priorSampling(n = 50, plotTraces = T, plotDensities = F, alpha = c(0.9,0.9,0.6,0.9,2))
-priorSampling(n = 10000, plotTraces = F, plotDensities = T, alpha = c(0.9,0.9,0.6,0.9,2)) 
+priorSampling(n = 50, plotTraces = T, plotDensities = F, alpha = c(0.9,0.9,0.4,0.9,1.5))
+priorSampling(n = 1000000, plotTraces = F, plotDensities = T, alpha = c(0.9,0.9,0.4,0.9,1.5)) 
   
+sigsamp = rgamma(1000000,1,2)
+rsamp = runif(1000000,0,1)
+v = (exp(sigsamp^2) - 1)*rsamp^2
+sum(v>100)
+v = v[-which(v > 10)]
+median(sqrt(v))
 
+plot(density(sqrt(v)), xlim = c(0,1), main="density of sampled standard deviation", xlab = "sqrt(v)")
   
 #Write and read to file
 
@@ -420,6 +427,7 @@ priorSampling = function(n = 10, plotDensities = T, plotTraces = F, alpha = c(1,
   
   if(plotDensities == T)
   {
+    par(mfrow = c(4,2))
     plot(density(theta[,1]), main="Prior density of theta 1")
     plot(density(theta[,2]), main="Prior density of theta 2")
     plot(density(theta[,3]), main="Prior density of theta 3")
@@ -428,12 +436,14 @@ priorSampling = function(n = 10, plotDensities = T, plotTraces = F, alpha = c(1,
     plot(density(theta[,6]), main="Prior density of theta 6")
     plot(density(theta[,7]), main="Prior density of theta 7")
     plot(density(theta[,8]), main="Prior density of theta 8")
-    plot(density(y[,1]), main="Prior density of IC for x0")
-    plot(density(y[,2]), main="Prior density of IC for x1")
-    plot(density(y[,3]), main="Prior density of IC for x2")
-    plot(density(y[,4]), main="Prior density of IC for y0")
-    plot(density(y[,5]), main="Prior density of IC for y1")
-    plot(density(R0), main="Prior density of R0")
+    par(mfrow = c(3,2))
+    plot(density(y[,1]), main="Prior density of IC for x0", xlab = "x0")
+    plot(density(y[,2]), main="Prior density of IC for x1", xlab = "x1")
+    plot(density(y[,3]), main="Prior density of IC for x2", xlab = "x2")
+    plot(density(y[,4]), main="Prior density of IC for y0", xlab = "y0")
+    plot(density(y[,5]), main="Prior density of IC for y1", xlab = "y1")
+    plot(density(R0), main="Prior density of R0", xlab = "R0")
+    par(mfrow = c(1,1))
     plot(density(z), main="Prior density of z")
   }
   
@@ -454,20 +464,24 @@ priorSampling = function(n = 10, plotDensities = T, plotTraces = F, alpha = c(1,
       out = ode(y = state, times = times, func = desystem, parms = parameters)
       tempList[[i]] = out
     }
-    
+    count = 0
     for(i in seq_len(n))
     {
       out = tempList[[i]]
+      R = out[,6]/(out[,6] + 2*out[,4])
+      if(R[2] < R[1])
+        count = count + 1
       if(i == 1)
-        plot(times, out[,6]/(out[,6] + 2*out[,4]), xlab="time", ylab="R", ylim = c(0,1), type='l', col = i)
+        plot(times, R, xlab="time", ylab="R", ylim = c(0,1), type='l', col = i, main = "Sample solutions with theta and ICs sampled from the priors")
       else
-        lines(times, out[,6]/(out[,6] + 2*out[,4]), col = i)
+        lines(times, R, col = i)
     }
+    print(count/n)
     for(i in seq_len(n))
     {
       out = tempList[[i]]
       if(i == 1)
-        plot(times, out[,2], xlab="time", ylab="R", ylim = c(0,1), col=i, type='l')
+        plot(times, out[,2], xlab="time", ylab="x0", ylim = c(0,1), col=i, type='l')
       else
         lines(times, out[,2], col = i)
     }
@@ -475,7 +489,7 @@ priorSampling = function(n = 10, plotDensities = T, plotTraces = F, alpha = c(1,
     {
       out = tempList[[i]]
       if(i == 1)
-        plot(times, out[,3], xlab="time", ylab=R, ylim = c(0,1), type = 'l', col=i)
+        plot(times, out[,3], xlab="time", ylab="x1", ylim = c(0,1), type = 'l', col=i)
       else
         lines(times, out[,3], col = i)
     }
@@ -483,7 +497,7 @@ priorSampling = function(n = 10, plotDensities = T, plotTraces = F, alpha = c(1,
     {
       out = tempList[[i]]
       if(i == 1)
-        plot(times, out[,4], xlab="time", ylab=R, ylim = c(0,1), type='l', col=i)
+        plot(times, out[,4], xlab="time", ylab="x2", ylim = c(0,1), type='l', col=i)
       else
         lines(times, out[,4], col = i)
     }
@@ -491,7 +505,7 @@ priorSampling = function(n = 10, plotDensities = T, plotTraces = F, alpha = c(1,
     {
       out = tempList[[i]]
       if(i == 1)
-        plot(times, out[,5], xlab="time", ylab=R, ylim = c(0,1), type='l', col=i)
+        plot(times, out[,5], xlab="time", ylab="y0", ylim = c(0,1), type='l', col=i)
       else
         lines(times, out[,5], col = i)
     }
@@ -499,7 +513,7 @@ priorSampling = function(n = 10, plotDensities = T, plotTraces = F, alpha = c(1,
     {
       out = tempList[[i]]
       if(i == 1)
-        plot(times, out[,6], xlab="time", ylab=R, ylim = c(0,1), type='l', col=i)
+        plot(times, out[,6], xlab="time", ylab="y1", ylim = c(0,1), type='l', col=i)
       else
         lines(times, out[,6], col = i)
     }

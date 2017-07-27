@@ -6,7 +6,7 @@ functions {
 	}      
 }data {	int<lower=1> T;      	real R[T];      	real t0;      	real ts[T-1];
 	vector<lower = 0>[5] alpha;}transformed data {      	real x_r[0];      	int x_i[0];
-}parameters {      	real<lower=0, upper=1> v;
+}parameters {      	real<lower=0> v;
 	real<lower=0,upper=1> z;
 	simplex[5] y0temp;      	real<lower=0,upper=1> theta[8];}
 transformed parameters {
@@ -16,11 +16,11 @@ transformed parameters {
 model {      	real y_hat[T-1,5];
       	real R_hat[T];
 	//real sigma[T];
-	      	v ~ chi_square(0.008);
+	      	v ~ gamma(1,2);
       	theta ~ uniform(0,1);
 	//z ~ beta(4,1);
 	z ~ uniform(0,1);
-	y0temp ~ dirichlet(alpha);a
+	y0temp ~ dirichlet(alpha);
 	R_hat[1] = y0[5]/(y0[5] + 2 * y0[3]);
 	//sigma[1] = sqrt(log((v/(R_hat[1]^2)) + 1));
 	R[1] ~ lognormal(log(R_hat[1]) - (v^2)/2 , v);
