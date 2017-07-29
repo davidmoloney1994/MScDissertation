@@ -12,33 +12,9 @@ data = read.csv("datatest.csv", header=T, stringsAsFactors=F)
 
 #Set the data to be used
 inputdata = setRemissionData(data, showPlot = T)
-inputdata = setPatientData(data, 25, showPlot = T)
 
-standata = list(T = length(inputdata[,1]), 
-                          R = inputdata$BCR.ABL1.ABL1....,
-                          t0 = 0,
-                          ts = inputdata$Month[-1],
-                          alpha = c(0.9,0.9,0.4,0.9,1.5))
-
-fit <- stan(file = 'MScDissertation/odemcmc.stan', data = standata, 
-            iter = 100, chains = 1)
-
-print(fit)
-get_inits(fit)
-
-sampleMcmcList = generateListData(fit, nruns = n)
-finalsolutionplot(mcmcList = sampleMcmcList, xdata = inputdata$Month, ydata = inputdata$BCR.ABL1.ABL1....)
-generatePlots(mcmcList = sampleMcmcList, plotDensity = T, plotTheta = T, ploty0 = T, plotz = T, plotv = T)
-
-svdtransfromplot(stanfit = fit, Phi = 0, Theta = 100)
-
-
-
-#Multiple runs
-
-
-inputdata = setRemissionData(data, showPlot = T)
-inputdata = setPatientData(data, 25, showPlot = T)
+inputdata = setPatientData(data, 10, showPlot = F)
+inputdata = setPatientData(data, 25, showPlot = F)
 
 standata = list(T = length(inputdata[,1]), 
                 R = inputdata$BCR.ABL1.ABL1....,
@@ -46,21 +22,24 @@ standata = list(T = length(inputdata[,1]),
                 ts = inputdata$Month[-1],
                 alpha = c(0.9,0.9,0.4,0.9,1.5))
 
-n = 4
+#number of mcmc chains
+n = 8
 
 fit <- stan(file = 'MScDissertation/odemcmc.stan', data = standata, 
-              iter = 1000, chains = n, warmup = 100)
+              iter = 30000, chains = n, warmup = 3000)
 
-
+#Create list of mcmc output from 'fit' for use in functions
 sampleMcmcList = generateListData(fit, nruns = n)
 
-par(mfrow = c(3,2))
+
+
+par(mfrow = c(1,2))
 finalsolutionplot(mcmcList = sampleMcmcList, xdata = inputdata$Month, ydata = inputdata$BCR.ABL1.ABL1....)
 finalsolutionplot(mcmcList = sampleMcmcList, xdata = inputdata$Month, ydata = inputdata$BCR.ABL1.ABL1...., meanSol = T)
-generatePlots(mcmcList = sampleMcmcList, plotDensity = T, plotTheta = T, ploty0 = T, plotz = T, plotv = T, plotR0 = T, plotloglik = T)
+generatePlots(mcmcList = sampleMcmcList, plotDensity = T, plotTheta = T, ploty0 = T, plotz = F, plotv = T, plotR0 = T, plotloglik = T)
 generatePlots(mcmcList = sampleMcmcList, plotDensity = F, plotTrace = T, plotTheta = F, ploty0 = F, plotz = F, plotv = F, plotloglik = T)
 IndividualSolutionPlot(mcmcList = sampleMcmcList, xdata = inputdata$Month, ydata = inputdata$BCR.ABL1.ABL1....)
-PlotSampleSolutions(mcmcList = sampleMcmcList, xdata = inputdata$Month, ydata = inputdata$BCR.ABL1.ABL1...., numSamples = 50, plotIndSamples = T)
+PlotSampleSolutions(mcmcList = sampleMcmcList, xdata = inputdata$Month, ydata = inputdata$BCR.ABL1.ABL1...., numSamples = 30, plotIndSamples = F)
 svdtransfromplot(mcmcList  = sampleMcmcList, angle = 20, dim=2)
 
 
@@ -77,16 +56,19 @@ median(sqrt(v))
 
 plot(density(sqrt(v)), xlim = c(0,1), main="density of sampled standard deviation", xlab = "sqrt(v)")
   
+
+#EDA
+
+remmissionInd = c(10, 23, 48)
+relapseInd = c(7, 25, 47)
+
+par(mfrow = c(2,3))
+dataPlot(data, PatientInd = c(remmissionInd, relapseInd), overlay = F, type = 'l')
+
 #Write and read to file
-
-#write.csv(extract(fit,permuted=T), file='50000relapse.csv', row.names=F)
-mcmcdat = read.csv('50000relapse.csv', header=T)
-sampleMcmcList = generateListData(mcmcData = mcmcdat)
-finalsolutionplot(mcmcList = sampleMcmcList, xdata = inputdata$Month, ydata = inputdata$BCR.ABL1.ABL1....)
-generatePlots(mcmcList = sampleMcmcList, plotDensity = T, plotTheta = T, ploty0 = T, plotz = T, plotv = T)
-svdtransfromplot(mcmcData = mcmcdat, angle = 20, dim=3)
-
-
+saveRDS(sampleMcmcList, file = "25Relapse30000_3000Normal.RData")
+sampleMcmcList = readRDS("25Relapse30000_3000Normal.RData")
+sampleMcmcList = readRDS("10Remission30000_3000Normal.RData")
 
 
 
@@ -135,7 +117,7 @@ finalsolutionplot = function(mcmcList = NULL, xdata, ydata, meanSol = F)
   {
     
     if(i == 1)
-      plot(xdata, ydata, ylim=c(0,1), xlim=c(0, max(xdata)+5), main="Final Solution")
+      plot(xdata, ydata, ylim=c(0,0.8), xlim=c(0, max(xdata)+5), main="Final Solution", xlab = "Time (Months)", ylab = "Predicted BCR-ABL level")
     
     #Set parameters
     mcmcData = as.matrix(mcmcList[[i]])
@@ -216,7 +198,7 @@ PlotSampleSolutions = function(mcmcList = NULL, xdata, ydata, numSamples = 50, p
   
   tempList = vector("list", numSamples)
   
-  plot(xdata, ydata, ylim=c(0,1), xlim=c(0, max(xdata)+5), main="Sample Solutions")
+  plot(xdata, ydata, ylim=c(0,1), xlim=c(0, max(xdata)+5), main="Sample Solutions", xlab = "Time (Months)", ylab = "Predicted BCR-ABL")
   
   times = seq(0, max(xdata) + 5, by = 0.1)
   
@@ -248,7 +230,7 @@ PlotSampleSolutions = function(mcmcList = NULL, xdata, ydata, numSamples = 50, p
       {
         tempout = tempList[[i]]
         if(i == 1)
-          plot(tempout[,j+1], main = paste("Proportion of Variable",j), ylim = c(0,1), type = 'l', col=8, lwd=1)
+          plot(tempout[,j+1], main = paste("Proportion of Variable",j), ylab = paste("Variable",j), xlab = "Time (Months)",  ylim = c(0,1), type = 'l', col=8, lwd=1)
         else
           lines(tempout[,j+1], col=8, lwd=1)
       }
@@ -365,11 +347,40 @@ setPatientData = function(fulldata, PatientNumber = 25, showPlot = F)
   PatientData = tempdata[ind,]
   
   if(showPlot == T)
-    plot(PatientData[,2], PatientData[,3], ylim=c(0,1))
+    plot(PatientData[,2], PatientData[,3], ylim=c(0,1), xlab = "Time from beginning of treatment (Months)", ylab = "BCR-ABL level")
   
   return(PatientData)
 }
 
+
+dataPlot = function(fulldata, PatientInd = 25, overlay = F, type = 'l')
+{
+  tempdata = fulldata
+  tempdata[,3] = as.numeric(tempdata[,3])
+  tempdata = na.omit(tempdata)
+  
+  tempdata[,3] = tempdata[,3]/100
+  count = 1
+  for(PatientNumber in PatientInd)
+  {
+    ind = which(tempdata[,1] == PatientNumber)
+    
+    if(type != 'l')
+      type = 'p'
+    
+    PatientData = tempdata[ind,]
+    if(overlay == T)
+    {
+      if(count == 1)
+        plot(PatientData[,2], PatientData[,3], ylim=c(0,1), xlim = c(0,60), xlab = "Time from beginning of treatment (Months)", ylab = "BCR-ABL level", type = type, col = count)
+      else
+        lines(PatientData[,2], PatientData[,3], col = count)
+    }
+    else
+      plot(PatientData[,2], PatientData[,3], ylim=c(0,1), xlab = "Time from beginning of treatment (Months)", ylab = "BCR-ABL level", type = type)
+    count = count + 1
+  }  
+}
 #Sets aggrigated remission data
 setRemissionData = function(fulldata, showPlot=F)
 {

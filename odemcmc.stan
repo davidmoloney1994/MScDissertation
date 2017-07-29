@@ -16,23 +16,23 @@ transformed parameters {
 model {      	real y_hat[T-1,5];
       	real R_hat[T];
 	//real sigma[T];
-	      	v ~ gamma(1,2);
+	      	v ~ gamma(0.25,5);
       	theta ~ uniform(0,1);
 	//z ~ beta(4,1);
 	z ~ uniform(0,1);
 	y0temp ~ dirichlet(alpha);
 	R_hat[1] = y0[5]/(y0[5] + 2 * y0[3]);
 	//sigma[1] = sqrt(log((v/(R_hat[1]^2)) + 1));
-	R[1] ~ lognormal(log(R_hat[1]) - (v^2)/2 , v);
-	//R[1] ~ normal(R_hat[1], sqrt(v));
+	//R[1] ~ lognormal(log(R_hat[1]) - (v^2)/2 , v);
+	R[1] ~ normal(R_hat[1], sqrt(v));
 	//R[1] ~ lognormal(log(R_hat[1]) - (sigma[1]^2)/2 , sigma[1]);
 
       	y_hat = integrate_ode_rk45(m1ode, to_array_1d(y0), t0, ts, theta, x_r, x_i);
 
       	for (t in 2:T) {
 		R_hat[t] = y_hat[t-1,5]/(y_hat[t-1,5] + 2 * y_hat[t-1,3]);
-		//sigma[t] = sqrt(log((v/(R_hat[t]^2)) + 1));        	R[t] ~ lognormal(log(R_hat[t]) - (v^2)/2 , v);
-		//R[t] ~ normal(R_hat[t], sqrt(v));
+		//sigma[t] = sqrt(log((v/(R_hat[t]^2)) + 1));        	//R[t] ~ lognormal(log(R_hat[t]) - (v^2)/2 , v);
+		R[t] ~ normal(R_hat[t], sqrt(v));
 		//R[t] ~ lognormal(log(R_hat[t]) - (sigma[t]^2)/2 , sigma[t]);
       	}}
 
