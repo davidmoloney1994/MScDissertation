@@ -7,6 +7,7 @@ library(deSolve)
 library(plot3D)
 library(rBeta2009)
 library(scatterplot3d)
+library(shinystan)
 
 data = read.csv("datatest.csv", header=T, stringsAsFactors=F)
 
@@ -23,14 +24,17 @@ standata = list(T = length(inputdata[,1]),
                 alpha = c(0.9,0.9,0.4,0.9,1.5))
 
 #number of mcmc chains
-n = 8
+n = 4
 
 fit <- stan(file = 'MScDissertation/odemcmc.stan', data = standata, 
-              iter = 30000, chains = n, warmup = 3000)
+              iter = 30000, chains = n, warmup = 500)
+
+#sso = as.shinystan(samplefit)
+#launch_shinystan(sso)
 
 #Create list of mcmc output from 'fit' for use in functions
 sampleMcmcList = generateListData(fit, nruns = n)
-
+sampleMcmcList = generateListData(samplefit, nruns = n)
 
 
 par(mfrow = c(1,2))
@@ -41,6 +45,8 @@ generatePlots(mcmcList = sampleMcmcList, plotDensity = F, plotTrace = T, plotThe
 IndividualSolutionPlot(mcmcList = sampleMcmcList, xdata = inputdata$Month, ydata = inputdata$BCR.ABL1.ABL1....)
 PlotSampleSolutions(mcmcList = sampleMcmcList, xdata = inputdata$Month, ydata = inputdata$BCR.ABL1.ABL1...., numSamples = 30, plotIndSamples = F)
 svdtransfromplot(mcmcList  = sampleMcmcList, angle = 20, dim=2)
+generatePlots(mcmcList = sampleMcmcList, plotDensity = F, plotTrace = T, plotTheta = T, ploty0 = T, plotz = F, plotv = T, plotloglik = T)
+generatediagnostics(mcmcfit = fit, plotTrace = T, plotACF = T, plotDensity = F, plotTheta = F, ploty0 = F, plotv = F, plotloglik = T)
 
 
 #Prior Elic
@@ -66,7 +72,8 @@ par(mfrow = c(2,3))
 dataPlot(data, PatientInd = c(remmissionInd, relapseInd), overlay = F, type = 'l')
 
 #Write and read to file
-saveRDS(sampleMcmcList, file = "25Relapse30000_3000Normal.RData")
+saveRDS(fit, file = "10Remission30000Normalfit.RData")
+samplefit = readRDS("10Remission30000Normalfit.RData")
 sampleMcmcList = readRDS("25Relapse30000_3000Normal.RData")
 sampleMcmcList = readRDS("10Remission30000_3000Normal.RData")
 
@@ -106,6 +113,34 @@ generateListData = function(stanfit = NULL, mcmcData = NULL, nruns = 1)
     tempList[[1]] = mcmcData
   }
   return(tempList)
+}
+
+generatediagnostics = function(mcmcfit = NULL, plotTrace = F, plotACF = F, plotDensity = F, plotTheta = F, ploty0 = F, plotv = F, plotloglik = F)
+{
+  print(mcmcfit, pars = c("theta", "y0", "v", "lp__"), probs=NULL)
+  
+  thetaLabel = NULL
+  y0Label = NULL
+  vLabel = NULL
+  logpostLabel = NULL
+  
+  if(plotTheta == T)
+    thetaLabel = "theta"
+  if(ploty0 == T)
+    y0Label = "y0"
+  if(plotv == T)
+    vLabel = "v"
+  if(plotloglik == T)
+    logpostLabel = "lp__"
+  
+  if(plotTrace == T)
+    print(stan_trace(mcmcfit, pars = c(thetaLabel, y0Label, vLabel, logpostLabel), inc_warmup = TRUE, nrow = 2) + xlim(0, 5000)) 
+  
+  if(plotACF == T)
+    print(stan_ac(mcmcfit, pars = c(thetaLabel, y0Label, vLabel, logpostLabel)))
+  
+  if(plotDensity == T)
+    print(stan_dens(mcmcfit, pars = c(thetaLabel, y0Label, vLabel, logpostLabel), separate_chains = T))
 }
 
 
