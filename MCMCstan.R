@@ -46,8 +46,42 @@ IndividualSolutionPlot(mcmcList = sampleMcmcList, xdata = inputdata$Month, ydata
 PlotSampleSolutions(mcmcList = sampleMcmcList, xdata = inputdata$Month, ydata = inputdata$BCR.ABL1.ABL1...., numSamples = 30, plotIndSamples = F)
 svdtransfromplot(mcmcList  = sampleMcmcList, angle = 20, dim=2)
 generatePlots(mcmcList = sampleMcmcList, plotDensity = F, plotTrace = T, plotTheta = T, ploty0 = T, plotz = F, plotv = T, plotloglik = T)
-generatediagnostics(mcmcfit = fit, plotTrace = T, plotACF = T, plotDensity = F, plotTheta = F, ploty0 = F, plotv = F, plotloglik = T)
+generatediagnostics(mcmcfit = samplefit, plotTrace = T, plotACF = T, plotDensity = F, plotTheta = F, ploty0 = F, plotv = F, plotloglik = T)
 
+
+#Running multiple patients
+PatientIDs = c(4,5)
+
+for(i in PatientIDs)
+{
+  inputdata = setPatientData(data, i, showPlot = F)
+  
+  standata = list(T = length(inputdata[,1]), 
+                  R = inputdata$BCR.ABL1.ABL1....,
+                  t0 = 0,
+                  ts = inputdata$Month[-1],
+                  alpha = c(0.9,0.9,0.4,0.9,1.5))
+
+  n = 4
+  print(paste("##########################        PATIENT",i, "     ##########################"), quote = F)
+  
+  fit <- stan(file = 'MScDissertation/odemcmc.stan', data = standata, 
+              iter = 10000, chains = n, warmup = 500)
+  
+  saveRDS(fit, file = paste(i, "10000fit.RData", sep="_"))
+}
+
+for(i in PatientIDs)
+{
+  samplefit = readRDS(paste(i, "10000fit.RData", sep="_"))
+  
+  inputdata = setPatientData(data, i, showPlot = F)
+  
+  sampleMcmcList = generateListData(samplefit, nruns = n)
+  
+  finalsolutionplot(mcmcList = sampleMcmcList, xdata = inputdata$Month, ydata = inputdata$BCR.ABL1.ABL1....)
+  generatediagnostics(mcmcfit = samplefit, plotTrace = F, plotACF = T, plotDensity = F, plotTheta = F, ploty0 = F, plotv = F, plotloglik = T)
+}
 
 #Prior Elic
 priorSampling(n = 50, plotTraces = T, plotDensities = F, alpha = c(0.9,0.9,0.4,0.9,1.5))
@@ -141,6 +175,11 @@ generatediagnostics = function(mcmcfit = NULL, plotTrace = F, plotACF = F, plotD
   
   if(plotDensity == T)
     print(stan_dens(mcmcfit, pars = c(thetaLabel, y0Label, vLabel, logpostLabel), separate_chains = T))
+
+  #print(stan_diag(mcmcfit, information = "sample"))
+  #print(stan_par(mcmcfit, par = c(thetaLabel, y0Label, vLabel, logpostLabel)))
+  #print(stan_ess(mcmcfit, pars = c(thetaLabel, y0Label, vLabel, logpostLabel)))
+  #print(stan_mcse(mcmcfit, pars = c(thetaLabel, y0Label, vLabel, logpostLabel)))
 }
 
 
