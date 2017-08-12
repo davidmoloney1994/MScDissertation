@@ -8,13 +8,12 @@ library(plot3D)
 library(rBeta2009)
 library(scatterplot3d)
 library(shinystan)
+library(parallel)
 
 data = read.csv("datatest.csv", header=T, stringsAsFactors=F)
 
 #Set the data to be used
 inputdata = setRemissionData(data, showPlot = T)
-
-inputdata = setPatientData(data, 10, showPlot = F)
 inputdata = setPatientData(data, 25, showPlot = F)
 
 standata = list(T = length(inputdata[,1]), 
@@ -34,8 +33,6 @@ fit <- stan(file = 'MScDissertation/odemcmc.stan', data = standata,
 
 #Create list of mcmc output from 'fit' for use in functions
 sampleMcmcList = generateListData(fit, nruns = n)
-sampleMcmcList = generateListData(samplefit, nruns = n)
-
 
 par(mfrow = c(1,2))
 finalsolutionplot(mcmcList = sampleMcmcList, xdata = inputdata$Month, ydata = inputdata$BCR.ABL1.ABL1....)
@@ -48,40 +45,6 @@ svdtransfromplot(mcmcList  = sampleMcmcList, angle = 20, dim=2)
 generatePlots(mcmcList = sampleMcmcList, plotDensity = F, plotTrace = T, plotTheta = T, ploty0 = T, plotz = F, plotv = T, plotloglik = T)
 generatediagnostics(mcmcfit = samplefit, plotTrace = T, plotACF = T, plotDensity = F, plotTheta = F, ploty0 = F, plotv = F, plotloglik = T)
 
-
-#Running multiple patients
-PatientIDs = c(4,5)
-
-for(i in PatientIDs)
-{
-  inputdata = setPatientData(data, i, showPlot = F)
-  
-  standata = list(T = length(inputdata[,1]), 
-                  R = inputdata$BCR.ABL1.ABL1....,
-                  t0 = 0,
-                  ts = inputdata$Month[-1],
-                  alpha = c(0.9,0.9,0.4,0.9,1.5))
-
-  n = 4
-  print(paste("##########################        PATIENT",i, "     ##########################"), quote = F)
-  
-  fit <- stan(file = 'MScDissertation/odemcmc.stan', data = standata, 
-              iter = 10000, chains = n, warmup = 500)
-  
-  saveRDS(fit, file = paste(i, "10000fit.RData", sep="_"))
-}
-
-for(i in PatientIDs)
-{
-  samplefit = readRDS(paste(i, "10000fit.RData", sep="_"))
-  
-  inputdata = setPatientData(data, i, showPlot = F)
-  
-  sampleMcmcList = generateListData(samplefit, nruns = n)
-  
-  finalsolutionplot(mcmcList = sampleMcmcList, xdata = inputdata$Month, ydata = inputdata$BCR.ABL1.ABL1....)
-  generatediagnostics(mcmcfit = samplefit, plotTrace = F, plotACF = T, plotDensity = F, plotTheta = F, ploty0 = F, plotv = F, plotloglik = T)
-}
 
 #Prior Elic
 priorSampling(n = 50, plotTraces = T, plotDensities = F, alpha = c(0.9,0.9,0.4,0.9,1.5))
@@ -98,12 +61,32 @@ plot(density(sqrt(v)), xlim = c(0,1), main="density of sampled standard deviatio
   
 
 #EDA
-
 remmissionInd = c(10, 23, 48)
 relapseInd = c(7, 25, 47)
 
 par(mfrow = c(2,3))
 dataPlot(data, PatientInd = c(remmissionInd, relapseInd), overlay = F, type = 'l')
+
+
+#Clustering
+PatientIDs = 1:69
+PatientIDs = PatientIDs[-66]
+
+DistanceMatrix = DifferenceMatrix(PatientNumbers = PatientIDs, theta_ind = c(1,2,6,7))
+DistanceMatrix = readRDS("Theta1267_DistMatrix.RData")
+
+saveRDS(DistanceMatrix, file = "Theta1267_DistMatrix.RData")
+
+hc = hclust(as.dist(DistanceMatrix), method = "complete")
+plot(hc)
+clusterGroupAnalysis(hc, no_groups = 7, selected_group = 1)
+
+DistanceMatrix = readRDS("Theta1267_DistMatrix.RData")
+mds = cmdscale(as.dist(DistanceMatrix), eig = T, k=2)
+plot(mds$points[,1], mds$points[,2], xlab="Coordinate 1", ylab="Coordinate 2", 
+     main="Metric	MDS",	type="n")
+text(mds$points[,1], mds$points[,2], labels = row.names(mds$points), cex=.7)
+PatientDiagnostics(PatientID = 9, plotTrace = F, plotACF = F, plotDensity = T, plotTheta = T, ploty0 = F, plotv = F, plotloglik = F, plotsol = T)
 
 #Write and read to file
 saveRDS(fit, file = "10Remission30000Normalfit.RData")
@@ -149,6 +132,23 @@ generateListData = function(stanfit = NULL, mcmcData = NULL, nruns = 1)
   return(tempList)
 }
 
+clusterGroupAnalysis = function(hclustObject, no_groups = 4, selected_group = 1)
+{
+  groups = cutree(hclustObject, no_groups)
+  group = PatientIDs[groups == selected_group]
+  for(i in group)
+  {
+    samplefit = readRDS(paste("PatientData/",i, "_10000fit.RData", sep=""))
+    #inputdata = setPatientData(data, i, showPlot = F)
+    #n=4
+    #sampleMcmcList = generateListData(samplefit, nruns = n)
+    #finalsolutionplot(mcmcList = sampleMcmcList, xdata = inputdata$Month, ydata = inputdata$BCR.ABL1.ABL1....)
+    generatediagnostics(mcmcfit = samplefit, plotTrace = F, plotACF = F, plotDensity = T, plotTheta = T, ploty0 = F, plotv = F, plotloglik = F)
+  }
+  print("Patents:")
+  print(group)
+}
+
 generatediagnostics = function(mcmcfit = NULL, plotTrace = F, plotACF = F, plotDensity = F, plotTheta = F, ploty0 = F, plotv = F, plotloglik = F)
 {
   print(mcmcfit, pars = c("theta", "y0", "v", "lp__"), probs=NULL)
@@ -174,7 +174,7 @@ generatediagnostics = function(mcmcfit = NULL, plotTrace = F, plotACF = F, plotD
     print(stan_ac(mcmcfit, pars = c(thetaLabel, y0Label, vLabel, logpostLabel)))
   
   if(plotDensity == T)
-    print(stan_dens(mcmcfit, pars = c(thetaLabel, y0Label, vLabel, logpostLabel), separate_chains = T))
+    print(stan_dens(mcmcfit, pars = c(thetaLabel, y0Label, vLabel, logpostLabel), separate_chains = F, nrow=4,ncol=2))
 
   #print(stan_diag(mcmcfit, information = "sample"))
   #print(stan_par(mcmcfit, par = c(thetaLabel, y0Label, vLabel, logpostLabel)))
@@ -182,6 +182,62 @@ generatediagnostics = function(mcmcfit = NULL, plotTrace = F, plotACF = F, plotD
   #print(stan_mcse(mcmcfit, pars = c(thetaLabel, y0Label, vLabel, logpostLabel)))
 }
 
+PatientDiagnostics = function(PatientID = 1, plotTrace = F, plotACF = F, plotDensity = F, plotTheta = F, ploty0 = F, plotv = F, plotloglik = F, plotsol = F)
+{
+  samplefit = readRDS(paste("PatientData/",PatientID, "_10000fit.RData", sep=""))
+  
+  if(plotsol == T)
+  {
+    inputdata = setPatientData(data, PatientID, showPlot = F)
+    sampleMcmcList = generateListData(samplefit, nruns = n)
+    finalsolutionplot(mcmcList = sampleMcmcList, xdata = inputdata$Month, ydata = inputdata$BCR.ABL1.ABL1....)
+  }
+  generatediagnostics(mcmcfit = samplefit, plotTrace = plotTrace, plotACF = plotACF, plotDensity = plotDensity, plotTheta = plotTheta, ploty0 = ploty0, plotv = plotv, plotloglik = plotloglik)
+}
+
+Total_CDF_Distance = function(Patients = c(1,2), n = 4, theta_ind = 1:8)
+{
+  samplefit1 = readRDS(paste("PatientData/",Patients[1], "_10000fit.RData", sep=""))
+  samplefit2 = readRDS(paste("PatientData/",Patients[2], "_10000fit.RData", sep=""))
+
+  data1 = extract(samplefit1)
+  data2 = extract(samplefit2)
+  
+  #mat1 = cbind(data1$theta, data1$y0, data1$v)
+  #mat2 = cbind(data2$theta, data2$y0, data2$v)
+  
+  mat1 = data1$theta
+  mat2 = data2$theta
+  
+  totalDiff = 0
+  ind = seq(0,1,0.001)
+  for(k in theta_ind)
+  {
+    cdf1 = ecdf(mat1[,k])
+    cdf2 = ecdf(mat2[,k])
+    totalDiff = totalDiff + max(abs(cdf1(ind) - cdf2(ind)))
+  }
+  return(totalDiff)
+}
+
+DifferenceMatrix = function(PatientNumbers = 1:69, n = 4, theta_ind = 1:8)
+{
+  n = length(PatientNumbers)
+  grid = combn(PatientNumbers, 2)
+  
+  no_cores = detectCores() - 1
+  cl = makeCluster(no_cores)
+  clusterExport(cl, "extract")
+  
+  temp = parApply(cl, grid, 2, Total_CDF_Distance, n = 4, theta_ind = theta_ind)
+  stopCluster(cl)
+  
+  mat = matrix(0, nrow = n, ncol = n)
+  mat[lower.tri(mat)] = temp
+  mat = mat + t(mat)
+  colnames(mat) = PatientNumbers
+  return(mat)
+}
 
 finalsolutionplot = function(mcmcList = NULL, xdata, ydata, meanSol = F)
 {
