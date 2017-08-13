@@ -9,6 +9,9 @@ library(rBeta2009)
 library(scatterplot3d)
 library(shinystan)
 library(parallel)
+library(MASS)
+
+
 
 data = read.csv("datatest.csv", header=T, stringsAsFactors=F)
 
@@ -68,38 +71,50 @@ par(mfrow = c(2,3))
 dataPlot(data, PatientInd = c(remmissionInd, relapseInd), overlay = F, type = 'l')
 
 
+#LDA
+PatientIDs = 1:69
+PatientIDs = PatientIDs[-66]
+
+ldafit = PatientLDA(PatientIDs = PatientIDs, theta_ind = 1:8, y0_ind = NULL, v_ind = NULL, num_samples = 10000)
+#saveRDS(ldafit, file = "ldafit.RData")
+
+ldafit = readRDS("ldafit.RData")
+plot(ldafit$scaling, rep(0,8))
+text(ldafit$scaling, c(0.1,0.1,0.1,0.1,-0.1,0.1,0.1,0.1), labels = 1:8, cex=1)
+abline(h=0)
+
+
+
+
 #Clustering
 PatientIDs = 1:69
 PatientIDs = PatientIDs[-66]
 
-DistanceMatrix = DifferenceMatrix(PatientNumbers = PatientIDs, theta_ind = c(1,2,6,7))
-DistanceMatrix = readRDS("Theta1267_DistMatrix.RData")
+DistanceMatrix = DifferenceMatrix(PatientNumbers = PatientIDs, theta_ind = 7)
+#saveRDS(DistanceMatrix, file = "Theta7_DistMatrix.RData")
 
-saveRDS(DistanceMatrix, file = "Theta1267_DistMatrix.RData")
+
+DistanceMatrix = readRDS("Theta7_DistMatrix.RData")
 
 hc = hclust(as.dist(DistanceMatrix), method = "complete")
 plot(hc)
 clusterGroupAnalysis(hc, no_groups = 7, selected_group = 1)
 
-DistanceMatrix = readRDS("Theta1267_DistMatrix.RData")
 mds = cmdscale(as.dist(DistanceMatrix), eig = T, k=2)
 plot(mds$points[,1], mds$points[,2], xlab="Coordinate 1", ylab="Coordinate 2", 
-     main="Metric	MDS",	type="n")
+     main="MDS",	type="n")
 text(mds$points[,1], mds$points[,2], labels = row.names(mds$points), cex=.7)
-PatientDiagnostics(PatientID = 9, plotTrace = F, plotACF = F, plotDensity = T, plotTheta = T, ploty0 = F, plotv = F, plotloglik = F, plotsol = T)
 
-#Write and read to file
-saveRDS(fit, file = "10Remission30000Normalfit.RData")
-samplefit = readRDS("10Remission30000Normalfit.RData")
-sampleMcmcList = readRDS("25Relapse30000_3000Normal.RData")
-sampleMcmcList = readRDS("10Remission30000_3000Normal.RData")
+PatientDiagnostics(PatientID = 62, plotTrace = F, plotACF = F, plotDensity = T, plotTheta = T, ploty0 = F, plotv = F, plotloglik = F, plotsol = T)
 
 
 
 
 
 
-#Functions
+######################################################
+##################   Functions   #####################
+######################################################
 
 #Ode system for solving ode in r
 desystem = function(t, state, parameters) {
@@ -188,8 +203,9 @@ PatientDiagnostics = function(PatientID = 1, plotTrace = F, plotACF = F, plotDen
   
   if(plotsol == T)
   {
+    data = read.csv("datatest.csv", header=T, stringsAsFactors=F)
     inputdata = setPatientData(data, PatientID, showPlot = F)
-    sampleMcmcList = generateListData(samplefit, nruns = n)
+    sampleMcmcList = generateListData(samplefit, nruns = 4)
     finalsolutionplot(mcmcList = sampleMcmcList, xdata = inputdata$Month, ydata = inputdata$BCR.ABL1.ABL1....)
   }
   generatediagnostics(mcmcfit = samplefit, plotTrace = plotTrace, plotACF = plotACF, plotDensity = plotDensity, plotTheta = plotTheta, ploty0 = ploty0, plotv = plotv, plotloglik = plotloglik)
@@ -237,6 +253,15 @@ DifferenceMatrix = function(PatientNumbers = 1:69, n = 4, theta_ind = 1:8)
   mat = mat + t(mat)
   colnames(mat) = PatientNumbers
   return(mat)
+}
+
+PatientLDA = function(PatientIDs = 1:69, theta_ind = 1:8, y0_ind = 1:5, v_ind = 1, num_samples = 1000)
+{
+  group = rep(as.numeric(PatientIDs %in% c(7,25,47)) + 1, each = num_samples)
+  samples = SampleFromPost(PatientIDs = PatientIDs, theta_ind = theta_ind, y0_ind = y0_ind, v_ind = v_ind, num_samples = num_samples)
+  
+  ldafit = lda(x = samples, grouping = group)
+  return(ldafit)
 }
 
 finalsolutionplot = function(mcmcList = NULL, xdata, ydata, meanSol = F)
@@ -308,6 +333,29 @@ finalsolutionplot = function(mcmcList = NULL, xdata, ydata, meanSol = F)
       lines(out[,1], R, col=i+1)
     }
   }
+}
+
+SampleFromPost = function(PatientIDs = 1:69, theta_ind = 1:8, y0_ind = 1:5, v_ind = 1, num_samples = 1000)
+{
+  sampleMat = NULL
+  for(i in PatientIDs)
+  {
+    samplefit = readRDS(paste("PatientData/",i, "_10000fit.RData", sep=""))
+    data = extract(samplefit)
+    theta = data$theta
+    y0 = data$y0
+    v = data$v
+    
+    samp_ind = sample(dim(theta)[1], num_samples)
+    
+    if(is.null(v_ind))
+      PatientSample = cbind(theta[samp_ind, theta_ind], y0[samp_ind, y0_ind])
+    else
+      PatientSample = cbind(theta[samp_ind, thetaInd], y0[samp_ind, y0_ind], v[samp_ind])
+      
+    sampleMat = rbind(sampleMat, PatientSample)
+  }
+  return(as.matrix(sampleMat))
 }
 
 PlotSampleSolutions = function(mcmcList = NULL, xdata, ydata, numSamples = 50, plotIndSamples = F)
