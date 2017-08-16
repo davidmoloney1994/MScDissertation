@@ -90,26 +90,36 @@ abline(h=0)
 PatientIDs = 1:69
 PatientIDs = PatientIDs[-66]
 
-DistanceMatrix = DifferenceMatrix(PatientNumbers = PatientIDs, theta_ind = 7)
-#saveRDS(DistanceMatrix, file = "Theta7_DistMatrix.RData")
+
+DistanceMatrix = DifferenceMatrix(PatientNumbers = PatientIDs, avg_dist = T)
+#saveRDS(DistanceMatrix, file = "EuclideanMean_DistMatrix.RData")
 
 
-DistanceMatrix = readRDS("Theta7_DistMatrix.RData")
-
-hc = hclust(as.dist(DistanceMatrix), method = "complete")
+DistanceMatrix = readRDS("EuclideanMean_DistMatrix.RData")
+image(DistanceMatrix)
+hc = hclust(as.dist(DistanceMatrix))
 plot(hc)
-clusterGroupAnalysis(hc, no_groups = 7, selected_group = 1)
+clusterGroupAnalysis(hc, no_groups = 4, selected_group = 3)
 
 mds = cmdscale(as.dist(DistanceMatrix), eig = T, k=2)
+#mds = sammon(as.dist(DistanceMatrix), magic=0.51)
 plot(mds$points[,1], mds$points[,2], xlab="Coordinate 1", ylab="Coordinate 2", 
      main="MDS",	type="n")
+
 text(mds$points[,1], mds$points[,2], labels = row.names(mds$points), cex=.7)
 
-PatientDiagnostics(PatientID = 62, plotTrace = F, plotACF = F, plotDensity = T, plotTheta = T, ploty0 = F, plotv = F, plotloglik = F, plotsol = T)
+PatientDiagnostics(PatientID = 59, plotTrace = F, plotACF = F, plotDensity = F, plotTheta = F, ploty0 = F, plotv = F, plotloglik = F, plotsol = T)
 
 
 
+library(PairViz)
+library(graph)
+pth=order_tsp(as.Dist(DistanceMatrix), method = "nearest", cycle=FALSE,improve=TRUE,path_dir = path_cor)
+image(com[pth,pth],xaxt='n',yaxt='n')
+axis(1, at=seq(0,1,length.out=nl),label=rownames(com)[pth],cex.axis=0.7,las=2)
+axis(2, at=seq(0,1,length.out=nl),label=colnames(com)[pth],cex.axis=0.7,las=2)
 
+library(distrEx)
 
 
 ######################################################
@@ -153,12 +163,13 @@ clusterGroupAnalysis = function(hclustObject, no_groups = 4, selected_group = 1)
   group = PatientIDs[groups == selected_group]
   for(i in group)
   {
-    samplefit = readRDS(paste("PatientData/",i, "_10000fit.RData", sep=""))
+    #samplefit = readRDS(paste("PatientData/",i, "_10000fit.RData", sep=""))
     #inputdata = setPatientData(data, i, showPlot = F)
     #n=4
     #sampleMcmcList = generateListData(samplefit, nruns = n)
     #finalsolutionplot(mcmcList = sampleMcmcList, xdata = inputdata$Month, ydata = inputdata$BCR.ABL1.ABL1....)
-    generatediagnostics(mcmcfit = samplefit, plotTrace = F, plotACF = F, plotDensity = T, plotTheta = T, ploty0 = F, plotv = F, plotloglik = F)
+    #generatediagnostics(mcmcfit = samplefit, plotTrace = F, plotACF = F, plotDensity = T, plotTheta = T, ploty0 = F, plotv = F, plotloglik = F)
+    PatientDiagnostics(PatientID = i, plotsol = T)
   }
   print("Patents:")
   print(group)
@@ -236,7 +247,32 @@ Total_CDF_Distance = function(Patients = c(1,2), n = 4, theta_ind = 1:8)
   return(totalDiff)
 }
 
-DifferenceMatrix = function(PatientNumbers = 1:69, n = 4, theta_ind = 1:8)
+Average_Distance = function(Patients = c(1,2), n = 4, num_samples = 100000, type = "mean")
+{
+  samplefit1 = readRDS(paste("PatientData/",Patients[1], "_10000fit.RData", sep=""))
+  samplefit2 = readRDS(paste("PatientData/",Patients[2], "_10000fit.RData", sep=""))
+  
+  data1 = extract(samplefit1)
+  data2 = extract(samplefit2)
+  
+  mat1 = data1$theta
+  mat2 = data2$theta
+  
+  ind1 = sample(seq_len(dim(mat1)[1]), num_samples, replace = T)
+  ind2 = sample(seq_len(dim(mat2)[1]), num_samples, replace = T)
+  
+  eucl = numeric(num_samples)
+  for(i in seq_len(num_samples))
+    eucl[i] = dist(rbind(mat1[ind1[i], ], mat2[ind2[i], ]))
+  
+  if(type == "mean")
+    return(mean(eucl))
+  
+  if(type == "max")
+    return(max(eucl))
+}
+
+DifferenceMatrix = function(PatientNumbers = 1:69, n = 4, theta_ind = 1:8, avg_dist = F)
 {
   n = length(PatientNumbers)
   grid = combn(PatientNumbers, 2)
@@ -245,7 +281,10 @@ DifferenceMatrix = function(PatientNumbers = 1:69, n = 4, theta_ind = 1:8)
   cl = makeCluster(no_cores)
   clusterExport(cl, "extract")
   
-  temp = parApply(cl, grid, 2, Total_CDF_Distance, n = 4, theta_ind = theta_ind)
+  if(avg_dist == F)
+    temp = parApply(cl, grid, 2, Total_CDF_Distance, n = 4, theta_ind = theta_ind)
+  else
+    temp = parApply(cl, grid, 2, Average_Distance, n = 4, num_samples = 100000, type = "mean")
   stopCluster(cl)
   
   mat = matrix(0, nrow = n, ncol = n)
